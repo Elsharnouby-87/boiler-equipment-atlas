@@ -281,9 +281,18 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     fireLight.position.set(-2.4, -0.7, 0);
     scene.add(fireLight);
 
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(12.8, mobileRender ? 40 : 72),
+      new THREE.MeshStandardMaterial({ color: '#0b1820', map: concreteTex, metalness: 0.08, roughness: 0.88 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -3.17;
+    ground.receiveShadow = !mobileRender;
+    scene.add(ground);
+
     const grid = new THREE.GridHelper(30, 30, '#1c5a78', '#123348');
-    grid.position.y = -3.15;
-    (grid.material as THREE.Material).opacity = 0.27;
+    grid.position.y = -3.145;
+    (grid.material as THREE.Material).opacity = 0.20;
     (grid.material as THREE.Material).transparent = true;
     scene.add(grid);
 
@@ -315,32 +324,89 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       labelGroup.add(s);
     };
 
+    const fireTubeCoords: [number, number][] = [];
+    [-1.35, -0.9, -0.45, 0, 0.45, 0.9, 1.35].forEach(y => {
+      [-1.45, -0.95, -0.45, 0.45, 0.95, 1.45].forEach(z => {
+        if (y < -0.45 && Math.abs(z) < 0.95) return;
+        if (Math.hypot(y * 0.92, z) < 1.95) fireTubeCoords.push([y, z]);
+      });
+    });
+
     // BOILER SHELL
     {
       const name = 'Boiler Shell';
       const g = component(name);
-      const shell = cylinderX(2.35, 8.1, material('#536774', 0.78, 0.32));
-      shell.castShadow = true;
-      shell.receiveShadow = true;
+      const shellMat = material('#65747b', 0.80, 0.34, 1, undefined, paintedSteelTex);
+      const seamMat = material('#9aa6ac', 0.88, 0.26, 1, undefined, stainlessTex);
+      const supportMat = material('#394850', 0.82, 0.44, 1, undefined, darkSteelTex);
+
+      const shell = cylinderX(2.35, 8.1, shellMat, mobileRender ? 44 : 72);
+      shell.castShadow = !mobileRender;
+      shell.receiveShadow = !mobileRender;
       tagMaterial(shell, 1, 'shell');
       mark(shell, name);
       g.add(shell);
 
-      [-3.2, 3.2].forEach(x => {
-        const ring = cylinderX(2.43, 0.10, material('#8fa0a8', 0.86, 0.24), 64);
+      [-3.55, -1.82, 0, 1.82, 3.55].forEach((x, index) => {
+        const ring = cylinderX(index === 0 || index === 4 ? 2.43 : 2.39, index === 0 || index === 4 ? 0.10 : 0.045, seamMat, 64);
         ring.position.x = x;
         tagMaterial(ring, 1, 'shell');
         mark(ring, name);
         g.add(ring);
       });
 
+      // Top manway / inspection cover.
+      const manwayBase = box(0.92, 0.12, 0.70, seamMat);
+      manwayBase.position.set(-0.65, 2.32, -0.50);
+      manwayBase.rotation.z = -0.02;
+      tagMaterial(manwayBase, 1, 'utility');
+      mark(manwayBase, name);
+      g.add(manwayBase);
+
+      const manwayCover = box(0.76, 0.12, 0.56, shellMat.clone());
+      manwayCover.position.set(-0.65, 2.43, -0.50);
+      tagMaterial(manwayCover, 1, 'utility');
+      mark(manwayCover, name);
+      g.add(manwayCover);
+
+      [
+        [-0.98, 2.49, -0.73], [-0.98, 2.49, -0.27],
+        [-0.32, 2.49, -0.73], [-0.32, 2.49, -0.27],
+      ].forEach(([x,y,z]) => {
+        const bolt = cylinderY(0.045, 0.08, seamMat, 10);
+        bolt.position.set(x,y,z);
+        tagMaterial(bolt, 1, 'utility');
+        mark(bolt, name);
+        g.add(bolt);
+      });
+
+      // Manufacturer/name plate.
+      const plate = box(0.78, 0.44, 0.035, material('#9eb0b8', 0.82, 0.24, 1, undefined, stainlessTex));
+      plate.position.set(-0.15, 0.45, 2.34);
+      tagMaterial(plate, 1, 'utility');
+      mark(plate, name);
+      g.add(plate);
+
+      // Saddles, cradle rings and baseplates.
       [-2.6, 2.6].forEach(x => {
-        const saddle = box(1.15, 0.45, 3.0, material('#394850', 0.8, 0.42));
-        saddle.position.set(x, -2.62, 0);
-        saddle.castShadow = true;
-        tagMaterial(saddle, 1, 'utility');
-        mark(saddle, name);
-        g.add(saddle);
+        const cradle = cylinderX(2.43, 0.18, supportMat, mobileRender ? 36 : 56);
+        cradle.position.x = x;
+        tagMaterial(cradle, 1, 'utility');
+        mark(cradle, name);
+        g.add(cradle);
+
+        const pedestal = box(1.10, 0.58, 2.85, supportMat);
+        pedestal.position.set(x, -2.70, 0);
+        pedestal.castShadow = !mobileRender;
+        tagMaterial(pedestal, 1, 'utility');
+        mark(pedestal, name);
+        g.add(pedestal);
+
+        const baseplate = box(1.45, 0.12, 3.25, material('#2b373d', 0.82, 0.48, 1, undefined, darkSteelTex));
+        baseplate.position.set(x, -3.05, 0);
+        tagMaterial(baseplate, 1, 'utility');
+        mark(baseplate, name);
+        g.add(baseplate);
       });
       addLabel(name, new THREE.Vector3(0, 2.9, -1.7));
     }
@@ -349,21 +415,40 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Water Space';
       const g = component(name);
-      const waterMat = material('#1d9bd1', 0.08, 0.2, 0.12);
+      const waterMat = material('#1d9bd1', 0.06, 0.18, 0.115);
       waterMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.62)];
-      const water = cylinderX(2.16, 7.45, waterMat, 56);
-      tagMaterial(water, 0.12, 'fluid');
+      const water = cylinderX(2.16, 7.45, waterMat, mobileRender ? 40 : 56);
+      tagMaterial(water, 0.115, 'fluid');
       mark(water, name);
       g.add(water);
+
+      const surface = new THREE.Mesh(
+        new THREE.PlaneGeometry(7.10, 3.45),
+        new THREE.MeshPhysicalMaterial({
+          color: '#56c8f5',
+          metalness: 0.02,
+          roughness: 0.15,
+          transparent: true,
+          opacity: 0.22,
+          clearcoat: 0.2,
+          clearcoatRoughness: 0.18,
+          side: THREE.DoubleSide,
+        }),
+      );
+      surface.rotation.x = -Math.PI / 2;
+      surface.position.y = 0.62;
+      tagMaterial(surface, 0.22, 'fluid');
+      mark(surface, name);
+      g.add(surface);
       addLabel(name, new THREE.Vector3(0.8, -1.75, 2.0));
     }
     {
       const name = 'Steam Space';
       const g = component(name);
-      const steamMat = material('#d9f4ff', 0.02, 0.18, 0.085);
+      const steamMat = material('#d9f4ff', 0.01, 0.15, 0.07);
       steamMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.62)];
-      const steam = cylinderX(2.15, 7.4, steamMat, 56);
-      tagMaterial(steam, 0.085, 'fluid');
+      const steam = cylinderX(2.15, 7.4, steamMat, mobileRender ? 40 : 56);
+      tagMaterial(steam, 0.07, 'fluid');
       mark(steam, name);
       g.add(steam);
       addLabel(name, new THREE.Vector3(0.6, 1.75, 2.05));
@@ -391,15 +476,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Fire Tubes';
       const g = component(name);
-      const coords: [number, number][] = [];
-      [-1.35, -0.9, -0.45, 0, 0.45, 0.9, 1.35].forEach(y => {
-        [-1.45, -0.95, -0.45, 0.45, 0.95, 1.45].forEach(z => {
-          if (y < -0.45 && Math.abs(z) < 0.95) return;
-          if (Math.hypot(y * 0.92, z) < 1.95) coords.push([y, z]);
-        });
-      });
-      coords.forEach(([y, z]) => {
-        const t = cylinderX(0.105, 6.72, material('#9b7b56', 0.78, 0.34));
+      const tubeMat = material('#7f6e58', 0.88, 0.30, 1, undefined, darkSteelTex);
+      fireTubeCoords.forEach(([y, z]) => {
+        const t = cylinderX(0.105, 6.72, tubeMat, mobileRender ? 10 : 16);
         t.position.set(0, y + 0.18, z);
         tagMaterial(t, 1, 'internal');
         mark(t, name);
@@ -412,12 +491,25 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Tube Sheets';
       const g = component(name);
+      const sheetMat = material('#748188', 0.88, 0.29, 1, undefined, stainlessTex);
+      const endRimMat = material('#a38e72', 0.82, 0.25, 1, undefined, stainlessTex);
+      const tubeEndGeometry = new THREE.TorusGeometry(0.118, 0.016, 7, mobileRender ? 12 : 18);
+
       [-3.46, 3.46].forEach(x => {
-        const sheet = cylinderX(2.16, 0.16, material('#6e7d83', 0.86, 0.3), 56);
+        const sheet = cylinderX(2.16, 0.16, sheetMat, mobileRender ? 44 : 60);
         sheet.position.x = x;
-        tagMaterial(sheet, 0.72, 'internal');
+        tagMaterial(sheet, 0.78, 'internal');
         mark(sheet, name);
         g.add(sheet);
+
+        fireTubeCoords.forEach(([y,z]) => {
+          const rim = new THREE.Mesh(tubeEndGeometry, endRimMat);
+          rim.rotation.y = Math.PI / 2;
+          rim.position.set(x + (x < 0 ? -0.09 : 0.09), y + 0.18, z);
+          tagMaterial(rim, 1, 'internal');
+          mark(rim, name);
+          g.add(rim);
+        });
       });
       addLabel(name, new THREE.Vector3(3.5, 1.8, 1.7));
     }

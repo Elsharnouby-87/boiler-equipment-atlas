@@ -83,6 +83,82 @@ export function makeBoilerSurfaceTexture(kind: BoilerSurfaceKind, mobile = false
   return texture;
 }
 
+
+export function makeFlameEnvelopeGeometry(
+  length: number,
+  profile: Array<[number, number]>,
+  radialSegments = 24,
+) {
+  const points = profile.map(([fraction, radius]) => new THREE.Vector2(radius, fraction * length));
+  return new THREE.LatheGeometry(points, radialSegments, 0, Math.PI * 2);
+}
+
+export function makeFlameMaterial(
+  low: THREE.ColorRepresentation,
+  high: THREE.ColorRepresentation,
+  opacity: number,
+  seed: number,
+) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uLow: { value: new THREE.Color(low) },
+      uHigh: { value: new THREE.Color(high) },
+      uOpacity: { value: opacity },
+      uContextOpacity: { value: 1 },
+      uSeed: { value: seed },
+    },
+    vertexShader: `
+      uniform float uTime;
+      uniform float uSeed;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vec3 p = position;
+        float axial = clamp(uv.y, 0.0, 1.0);
+        float tip = pow(axial, 1.45);
+        float rootLock = smoothstep(0.0, 0.12, axial);
+        float sway =
+          sin(uTime * 4.4 + p.y * 2.0 + uSeed) * 0.055 +
+          sin(uTime * 7.7 + p.y * 4.8 + uSeed * 1.7) * 0.024 +
+          sin(uTime * 11.2 + p.y * 7.1 + uSeed * 2.3) * 0.010;
+        p.x += sway * rootLock * (0.18 + tip * 1.15);
+        p.z += cos(uTime * 4.0 + p.y * 2.6 + uSeed) * 0.040 * rootLock * (0.12 + tip);
+        p.x *= 0.97 + sin(uTime * 6.1 + p.y * 3.6 + uSeed) * 0.032 * axial;
+        p.z *= 0.98 + cos(uTime * 6.8 + p.y * 3.2 + uSeed) * 0.028 * axial;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform vec3 uLow;
+      uniform vec3 uHigh;
+      uniform float uOpacity;
+      uniform float uContextOpacity;
+      uniform float uSeed;
+      varying vec2 vUv;
+      void main() {
+        float bandA = 0.5 + 0.5 * sin(vUv.y * 35.0 - uTime * 8.4 + sin(vUv.x * 21.0 + uSeed));
+        float bandB = 0.5 + 0.5 * sin(vUv.y * 17.0 - uTime * 5.6 + cos(vUv.x * 29.0 + uSeed * 1.9));
+        float turbulence = mix(bandA, bandB, 0.44);
+        float rootFade = smoothstep(0.0, 0.055, vUv.y);
+        float tipFade = 1.0 - smoothstep(0.72, 1.0, vUv.y);
+        float edgeLife = rootFade * max(0.10, tipFade);
+        float tipFlicker = 0.82 + 0.18 * sin(uTime * 11.5 + uSeed * 4.0 + vUv.y * 10.0);
+        float alpha = (0.24 + turbulence * 0.56) * edgeLife * uOpacity * uContextOpacity;
+        alpha *= mix(1.0, tipFlicker, smoothstep(0.48, 1.0, vUv.y));
+        vec3 col = mix(uLow, uHigh, smoothstep(0.04, 0.9, vUv.y));
+        col *= 0.84 + turbulence * 0.34;
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+}
+
 export function cylinderBetween(
   a: THREE.Vector3,
   b: THREE.Vector3,

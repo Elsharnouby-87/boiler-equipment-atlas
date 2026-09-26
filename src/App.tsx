@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import Boiler3D from './Boiler3D';
 import BoilerTypesPage from './BoilerTypesPage';
+import ComponentsPage from './ComponentsPage';
 import OperationPage from './OperationPage';
 import TroubleshootingPage from './TroubleshootingPage';
 import GlobalNavigation from './GlobalNavigation';
@@ -258,7 +259,7 @@ const smartMode: Record<string, ViewMode> = {
 const componentNames = Object.keys(details);
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState<'atlas' | 'boilerTypes' | 'operation' | 'troubleshooting'>('atlas');
+  const [activeModule, setActiveModule] = useState<'atlas' | 'components' | 'boilerTypes' | 'operation' | 'troubleshooting'>('atlas');
   const [mode, setMode] = useState<ViewMode>('cutaway');
   const [selected, setSelected] = useState('Furnace Tube');
   const [labels, setLabels] = useState(true);
@@ -328,9 +329,12 @@ export default function App() {
   };
 
   const navigateGlobal = useCallback((target: NavigationTarget) => {
-    if (target === 'atlas' || target === 'components') {
+    if (target === 'atlas') {
       setActiveModule('atlas');
-      if (target === 'components' && window.matchMedia('(max-width: 980px)').matches) setMobileNavigatorOpen(true);
+      return;
+    }
+    if (target === 'components') {
+      setActiveModule('components');
       return;
     }
     if (target === 'boilerTypes') setActiveModule('boilerTypes');
@@ -338,6 +342,7 @@ export default function App() {
     if (target === 'troubleshooting') setActiveModule('troubleshooting');
   }, []);
 
+  if (activeModule === 'components') return <ComponentsPage onBack={() => setActiveModule('atlas')} onNavigate={navigateGlobal} />;
   if (activeModule === 'boilerTypes') return <BoilerTypesPage onBack={() => setActiveModule('atlas')} onNavigate={navigateGlobal} />;
   if (activeModule === 'operation') return <OperationPage onBack={() => setActiveModule('atlas')} onNavigate={navigateGlobal} />;
   if (activeModule === 'troubleshooting') return <TroubleshootingPage onBack={() => setActiveModule('atlas')} onNavigate={navigateGlobal} />;

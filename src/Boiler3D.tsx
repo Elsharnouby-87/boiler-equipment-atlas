@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { CameraCommand, ContextMode, ViewMode } from './modelTypes';
 
 type Props = {
@@ -14,15 +13,39 @@ type Props = {
   onSelect: (name: string) => void;
 };
 
+type OrbitState = {
+  yaw: number;
+  pitch: number;
+  radius: number;
+  target: THREE.Vector3;
+};
+
+type CameraPreset = {
+  yaw: number;
+  pitch: number;
+  radius: number;
+  target: [number, number, number];
+};
+
+type CameraTween = {
+  startedAt: number;
+  duration: number;
+  from: CameraPreset;
+  to: CameraPreset;
+};
+
 type SceneState = {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
-  controls: OrbitControls;
+  orbit: OrbitState;
+  updateCamera: () => void;
+  transitionCamera: (preset: CameraPreset, duration?: number) => void;
   root: THREE.Group;
   components: Map<string, THREE.Group>;
   labelGroup: THREE.Group;
   flowGroup: THREE.Group;
+  mobileRender: boolean;
 };
 
 const explodeOffsets: Record<string, THREE.Vector3> = {
@@ -46,7 +69,7 @@ function material(
   opacity = 1,
   emissive?: THREE.ColorRepresentation,
 ) {
-  const m = new THREE.MeshStandardMaterial({
+  const m = new THREE.MeshPhysicalMaterial({
     color,
     metalness,
     roughness,
@@ -54,6 +77,8 @@ function material(
     opacity,
     emissive: emissive ?? 0x000000,
     emissiveIntensity: emissive ? 0.5 : 0,
+    clearcoat: metalness > 0.45 ? 0.08 : 0.02,
+    clearcoatRoughness: 0.72,
   });
   return m;
 }
@@ -146,30 +171,75 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     if (!host) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#06111b');
+    scene.background = new THREE.Color('#07141f');
+    scene.fog = new THREE.FogExp2('#07141f', 0.021);
 
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
-    camera.position.set(10.6, 5.7, 11.5);
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(70, 20, 10),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        vertexShader: 'varying vec3 vPos; void main(){ vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+        fragmentShader: 'varying vec3 vPos; void main(){ float h=normalize(vPos).y*0.5+0.5; vec3 low=vec3(0.02,0.045,0.065); vec3 mid=vec3(0.045,0.11,0.16); vec3 high=vec3(0.08,0.18,0.25); vec3 col=mix(low,mid,smoothstep(0.12,0.58,h)); col=mix(col,high,smoothstep(0.58,1.0,h)); gl_FragColor=vec4(col,1.0); }',
+      }),
+    );
+    scene.add(sky);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    const mobileRender = window.matchMedia('(max-width: 700px)').matches || host.clientWidth <= 700;
+    const camera = new THREE.PerspectiveCamera(mobileRender ? 42 : 38, 1, 0.1, 120);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !mobileRender,
+      alpha: false,
+      powerPreference: 'high-performance',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobileRender ? 1.15 : 1.7));
+    renderer.shadowMap.enabled = !mobileRender;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.24;
     renderer.localClippingEnabled = true;
+    renderer.domElement.style.touchAction = 'none';
+    renderer.domElement.style.userSelect = 'none';
     host.appendChild(renderer.domElement);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.07;
-    controls.minDistance = 4;
-    controls.maxDistance = 32;
-    controls.target.set(0, 0.2, 0);
+    const orbit: OrbitState = {
+      yaw: -0.76,
+      pitch: 0.18,
+      radius: mobileRender ? 18.5 : 17,
+      target: new THREE.Vector3(0, 0.15, 0),
+    };
+    let cameraTween: CameraTween | null = null;
 
-    scene.add(new THREE.HemisphereLight('#a9d9ef', '#06111b', 1.2));
-    const key = new THREE.DirectionalLight('#cfeeff', 2.4);
+    const updateCamera = () => {
+      camera.position.set(
+        orbit.target.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.radius,
+        orbit.target.y + Math.sin(orbit.pitch) * orbit.radius,
+        orbit.target.z + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.radius,
+      );
+      camera.lookAt(orbit.target);
+    };
+
+    const transitionCamera = (preset: CameraPreset, duration = 720) => {
+      cameraTween = {
+        startedAt: performance.now(),
+        duration,
+        from: {
+          yaw: orbit.yaw,
+          pitch: orbit.pitch,
+          radius: orbit.radius,
+          target: [orbit.target.x, orbit.target.y, orbit.target.z],
+        },
+        to: preset,
+      };
+    };
+    updateCamera();
+
+    scene.add(new THREE.HemisphereLight('#a9d9ef', '#06111b', mobileRender ? 1.35 : 1.2));
+    const key = new THREE.DirectionalLight('#cfeeff', mobileRender ? 1.9 : 2.4);
     key.position.set(-7, 10, 9);
-    key.castShadow = true;
+    key.castShadow = !mobileRender;
     scene.add(key);
     const rim = new THREE.DirectionalLight('#2fa8e4', 1.2);
     rim.position.set(8, 4, -9);
@@ -554,40 +624,60 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     // Flow particles: hot gas + water/steam indication
     const hotMat = material('#ff8c38', 0.0, 0.2, 0.85, '#ff4e13');
     const blueMat = material('#53c8f5', 0.0, 0.2, 0.72, '#1aa6e1');
-    for (let i = 0; i < 24; i += 1) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 10), hotMat.clone());
-      p.userData.phase = i / 24;
+    const hotGeometry = new THREE.SphereGeometry(0.055, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
+    const waterGeometry = new THREE.SphereGeometry(0.05, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
+    const hotCount = mobileRender ? 14 : 24;
+    const waterCount = mobileRender ? 10 : 16;
+    for (let i = 0; i < hotCount; i += 1) {
+      const p = new THREE.Mesh(hotGeometry, hotMat);
+      p.userData.phase = i / hotCount;
       p.userData.flowType = 'gas';
       flowGroup.add(p);
     }
-    for (let i = 0; i < 16; i += 1) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), blueMat.clone());
-      p.userData.phase = i / 16;
+    for (let i = 0; i < waterCount; i += 1) {
+      const p = new THREE.Mesh(waterGeometry, blueMat);
+      p.userData.phase = i / waterCount;
       p.userData.flowType = 'water';
       flowGroup.add(p);
     }
     flowGroup.visible = false;
 
-    const fitObject = (object: THREE.Object3D, multiplier = 1.75) => {
+    const presetForObject = (object: THREE.Object3D, multiplier = 1.65): CameraPreset | null => {
       const bounds = new THREE.Box3().setFromObject(object);
-      if (bounds.isEmpty()) return;
+      if (bounds.isEmpty()) return null;
       const size = bounds.getSize(new THREE.Vector3());
       const center = bounds.getCenter(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
-      const distance = Math.max(4.2, maxDim * multiplier);
-      camera.position.set(center.x + distance * 0.72, center.y + distance * 0.42, center.z + distance * 0.82);
-      controls.target.copy(center);
-      controls.update();
+      return {
+        yaw: orbit.yaw,
+        pitch: THREE.MathUtils.clamp(orbit.pitch, -0.36, 0.58),
+        radius: THREE.MathUtils.clamp(Math.max(3.9, maxDim * multiplier * (mobileRender ? 1.12 : 1)), 3.4, 34),
+        target: [center.x, center.y, center.z],
+      };
     };
 
-    const onPointerDown = (event: PointerEvent) => {
+    const fitObject = (object: THREE.Object3D, multiplier = 1.65, duration = 720) => {
+      const preset = presetForObject(object, multiplier);
+      if (preset) transitionCamera(preset, duration);
+    };
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const activePointers = new Map<number, { x: number; y: number }>();
+    let dragging = false;
+    let moved = false;
+    let lastX = 0;
+    let lastY = 0;
+    let panMode = false;
+    let pinchDistance = 0;
+    let pinchCenter = { x: 0, y: 0 };
+    let lastTapAt = 0;
+
+    const pickComponent = (clientX: number, clientY: number) => {
       const rect = renderer.domElement.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        -((event.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
       const hits = raycaster.intersectObjects(root.children, true);
       let fallback: string | undefined;
       for (const hit of hits) {
@@ -603,12 +693,105 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         if (!componentName) continue;
         if (!fallback) fallback = componentName;
         if (componentName === 'Boiler Shell' && modeRef.current !== 'normal') continue;
-        onSelect(componentName);
+        return componentName;
+      }
+      return fallback;
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      cameraTween = null;
+      dragging = true;
+      moved = false;
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      panMode = event.button === 2 || event.shiftKey;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      renderer.domElement.setPointerCapture(event.pointerId);
+
+      if (activePointers.size === 2) {
+        const pts = [...activePointers.values()];
+        pinchDistance = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        pinchCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      }
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!dragging || !activePointers.has(event.pointerId)) return;
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (activePointers.size >= 2) {
+        const pts = [...activePointers.values()].slice(0, 2);
+        const distance = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        const center = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+        if (pinchDistance > 0) {
+          orbit.radius = THREE.MathUtils.clamp(orbit.radius * (pinchDistance / Math.max(distance, 1)), 3.4, 34);
+        }
+        const panScale = Math.max(0.006, orbit.radius * 0.00075);
+        orbit.target.x -= (center.x - pinchCenter.x) * panScale;
+        orbit.target.y += (center.y - pinchCenter.y) * panScale;
+        pinchDistance = distance;
+        pinchCenter = center;
+        moved = true;
+        updateCamera();
         return;
       }
-      if (fallback) onSelect(fallback);
+
+      const dx = event.clientX - lastX;
+      const dy = event.clientY - lastY;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+
+      if (panMode) {
+        const panScale = Math.max(0.008, orbit.radius * 0.00105);
+        orbit.target.x -= dx * panScale;
+        orbit.target.y += dy * panScale;
+      } else {
+        orbit.yaw -= dx * (mobileRender ? 0.0062 : 0.0052);
+        orbit.pitch = THREE.MathUtils.clamp(
+          orbit.pitch + dy * (mobileRender ? 0.0046 : 0.0038),
+          -0.48,
+          0.78,
+        );
+      }
+
+      lastX = event.clientX;
+      lastY = event.clientY;
+      updateCamera();
     };
+
+    const onPointerUp = (event: PointerEvent) => {
+      const wasMoved = moved;
+      activePointers.delete(event.pointerId);
+      dragging = activePointers.size > 0;
+      pinchDistance = 0;
+
+      if (!wasMoved) {
+        const name = pickComponent(event.clientX, event.clientY);
+        if (name) {
+          const now = performance.now();
+          onSelect(name);
+          if (event.pointerType === 'touch' && now - lastTapAt < 320) {
+            const object = components.get(name);
+            if (object) fitObject(object, 2.05, 520);
+          }
+          lastTapAt = now;
+        }
+      }
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      cameraTween = null;
+      orbit.radius = THREE.MathUtils.clamp(orbit.radius + event.deltaY * 0.018, 3.4, 34);
+      updateCamera();
+    };
+
+    const onContextMenu = (event: MouseEvent) => event.preventDefault();
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
+    renderer.domElement.addEventListener('pointercancel', onPointerUp);
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+    renderer.domElement.addEventListener('contextmenu', onContextMenu);
 
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
@@ -623,9 +806,33 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     let raf = 0;
     const clock = new THREE.Clock();
+    let lastFrame = performance.now();
     const animate = () => {
+      const now = performance.now();
       const t = clock.getElapsedTime();
-      flowGroup.children.forEach((child) => {
+
+      if (cameraTween) {
+        const raw = THREE.MathUtils.clamp((now - cameraTween.startedAt) / cameraTween.duration, 0, 1);
+        const eased = raw < 0.5 ? 4 * raw * raw * raw : 1 - Math.pow(-2 * raw + 2, 3) / 2;
+        orbit.yaw = THREE.MathUtils.lerp(cameraTween.from.yaw, cameraTween.to.yaw, eased);
+        orbit.pitch = THREE.MathUtils.lerp(cameraTween.from.pitch, cameraTween.to.pitch, eased);
+        orbit.radius = THREE.MathUtils.lerp(cameraTween.from.radius, cameraTween.to.radius, eased);
+        orbit.target.set(
+          THREE.MathUtils.lerp(cameraTween.from.target[0], cameraTween.to.target[0], eased),
+          THREE.MathUtils.lerp(cameraTween.from.target[1], cameraTween.to.target[1], eased),
+          THREE.MathUtils.lerp(cameraTween.from.target[2], cameraTween.to.target[2], eased),
+        );
+        updateCamera();
+        if (raw >= 1) cameraTween = null;
+      }
+
+      components.forEach(group => {
+        const target = group.userData.targetPosition as THREE.Vector3 | undefined;
+        if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
+      });
+
+      if (flowGroup.visible && (!mobileRender || now - lastFrame > 24)) {
+        flowGroup.children.forEach((child) => {
         const phase = (child.userData.phase as number) ?? 0;
         if (child.userData.flowType === 'gas') {
           const u = (phase + t * 0.12) % 1;
@@ -634,21 +841,27 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           const u = (phase + t * 0.07) % 1;
           child.position.set(-2.8 + Math.sin((phase + t * 0.03) * 5) * 2.3, -1.7 + u * 3.3, 1.55 + Math.cos(phase * 10) * 0.28);
         }
-      });
-      controls.update();
+        });
+        lastFrame = now;
+      }
+
       renderer.render(scene, camera);
       raf = requestAnimationFrame(animate);
     };
     animate();
 
-    stateRef.current = { scene, camera, renderer, controls, root, components, labelGroup, flowGroup };
-    fitObject(root, 1.35);
+    stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, mobileRender };
+    fitObject(root, mobileRender ? 1.62 : 1.4, 0);
 
     return () => {
       cancelAnimationFrame(raf);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
-      controls.dispose();
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('pointercancel', onPointerUp);
+      renderer.domElement.removeEventListener('wheel', onWheel);
+      renderer.domElement.removeEventListener('contextmenu', onContextMenu);
       scene.traverse(obj => {
         if (obj instanceof THREE.Mesh) {
           obj.geometry.dispose();
@@ -677,7 +890,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     state.components.forEach((group, name) => {
       const base = (group.userData.basePosition as THREE.Vector3 | undefined) ?? new THREE.Vector3();
       const offset = explode ? (explodeOffsets[name] ?? new THREE.Vector3()) : new THREE.Vector3();
-      group.position.copy(base).add(offset);
+      const targetPosition = base.clone().add(offset);
+      group.userData.targetPosition = targetPosition;
 
       const contextFactor = contextMode === 'full' || name === selected
         ? 1
@@ -726,29 +940,41 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const state = stateRef.current;
     if (!state || cameraCommand.id === 0) return;
 
-    const fit = (object: THREE.Object3D, multiplier = 1.7) => {
+    const presetFor = (object: THREE.Object3D, multiplier = 1.7): CameraPreset | null => {
       const bounds = new THREE.Box3().setFromObject(object);
-      if (bounds.isEmpty()) return;
+      if (bounds.isEmpty()) return null;
       const size = bounds.getSize(new THREE.Vector3());
       const center = bounds.getCenter(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
-      const distance = Math.max(3.8, maxDim * multiplier);
-      state.camera.position.set(center.x + distance * 0.72, center.y + distance * 0.42, center.z + distance * 0.82);
-      state.controls.target.copy(center);
-      state.controls.update();
+      return {
+        yaw: state.orbit.yaw,
+        pitch: THREE.MathUtils.clamp(state.orbit.pitch, -0.36, 0.58),
+        radius: THREE.MathUtils.clamp(Math.max(3.8, maxDim * multiplier * (state.mobileRender ? 1.12 : 1)), 3.4, 34),
+        target: [center.x, center.y, center.z],
+      };
     };
 
     if (cameraCommand.action === 'fitBoiler' || cameraCommand.action === 'reset') {
-      fit(state.root, 1.35);
+      const preset = presetFor(state.root, state.mobileRender ? 1.62 : 1.4);
+      if (preset) state.transitionCamera({ ...preset, yaw: -0.76, pitch: 0.18 }, 760);
     } else if (cameraCommand.action === 'fitComponent') {
       const object = state.components.get(cameraCommand.component ?? selectedRef.current);
-      if (object) fit(object, 2.4);
+      const preset = object ? presetFor(object, state.mobileRender ? 2.55 : 2.25) : null;
+      if (preset) state.transitionCamera(preset, 650);
     } else if (cameraCommand.action === 'zoomIn') {
-      const direction = state.camera.position.clone().sub(state.controls.target);
-      state.camera.position.copy(state.controls.target.clone().add(direction.multiplyScalar(0.82)));
+      state.transitionCamera({
+        yaw: state.orbit.yaw,
+        pitch: state.orbit.pitch,
+        radius: THREE.MathUtils.clamp(state.orbit.radius * 0.82, 3.4, 34),
+        target: [state.orbit.target.x, state.orbit.target.y, state.orbit.target.z],
+      }, 300);
     } else if (cameraCommand.action === 'zoomOut') {
-      const direction = state.camera.position.clone().sub(state.controls.target);
-      state.camera.position.copy(state.controls.target.clone().add(direction.multiplyScalar(1.22)));
+      state.transitionCamera({
+        yaw: state.orbit.yaw,
+        pitch: state.orbit.pitch,
+        radius: THREE.MathUtils.clamp(state.orbit.radius * 1.22, 3.4, 34),
+        target: [state.orbit.target.x, state.orbit.target.y, state.orbit.target.z],
+      }, 300);
     }
   }, [cameraCommand]);
 

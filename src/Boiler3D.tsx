@@ -1969,6 +1969,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     let raf = 0;
     const clock = new THREE.Clock();
+    const labelWorldPosition = new THREE.Vector3();
+    const labelReferenceDistance = mobileRender ? 18.5 : 17.0;
     let lastFrame = performance.now();
     const animate = () => {
       const now = performance.now();
@@ -1992,6 +1994,35 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       components.forEach(group => {
         const target = group.userData.targetPosition as THREE.Vector3 | undefined;
         if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
+      });
+
+      // Keep labels readable while zooming out.  Sprites are world-space by
+      // default, so without compensation they shrink until the text becomes
+      // unreadable.  Scale them with camera distance while keeping a clamp so
+      // close-up views do not become dominated by labels.
+      labelGroup.children.forEach(label => {
+        if (!(label instanceof THREE.Sprite)) return;
+        let baseScale = label.userData.screenScaleBase as THREE.Vector3 | undefined;
+        if (!baseScale) {
+          baseScale = label.scale.clone();
+          label.userData.screenScaleBase = baseScale;
+        }
+        label.getWorldPosition(labelWorldPosition);
+        const distance = camera.position.distanceTo(labelWorldPosition);
+        const distanceFactor = Math.pow(
+          Math.max(0.25, distance / labelReferenceDistance),
+          0.86,
+        );
+        const scaleFactor = THREE.MathUtils.clamp(
+          distanceFactor,
+          mobileRender ? 0.78 : 0.72,
+          mobileRender ? 1.95 : 2.30,
+        );
+        label.scale.set(
+          baseScale.x * scaleFactor,
+          baseScale.y * scaleFactor,
+          baseScale.z,
+        );
       });
 
       flameLayers.forEach((mesh, index) => {

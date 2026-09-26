@@ -666,9 +666,12 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     flowGroup.visible = false;
 
     const highlight = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color('#ff9a3d'));
-    highlight.material.transparent = true;
-    highlight.material.opacity = mobileRender ? 0.22 : 0.32;
-    highlight.material.depthTest = false;
+    const highlightMaterials = Array.isArray(highlight.material) ? highlight.material : [highlight.material];
+    highlightMaterials.forEach(mat => {
+      mat.transparent = true;
+      mat.opacity = mobileRender ? 0.22 : 0.32;
+      mat.depthTest = false;
+    });
     highlight.renderOrder = 60;
     highlight.visible = false;
     scene.add(highlight);

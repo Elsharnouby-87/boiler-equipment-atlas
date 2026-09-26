@@ -52,9 +52,12 @@ type SceneState = {
 };
 
 const explodeOffsets: Record<string, THREE.Vector3> = {
-  'Burner & Ignition': new THREE.Vector3(-1.8, 0, 0),
-  'Front Smokebox': new THREE.Vector3(-0.9, 0, 0),
-  'Rear Smokebox': new THREE.Vector3(0.9, 0, 0),
+  'Burner & Ignition': new THREE.Vector3(-2.0, 0, 0),
+  'Front Smokebox': new THREE.Vector3(-1.15, 0, 0),
+  'Furnace Tube': new THREE.Vector3(0, -0.55, -0.95),
+  'Fire Tubes': new THREE.Vector3(0, 0.45, 0.95),
+  'Tube Sheets': new THREE.Vector3(0.45, 0, 0.65),
+  'Rear Smokebox': new THREE.Vector3(1.15, 0, 0),
   'Economizer': new THREE.Vector3(0.9, 0.45, 0),
   'Stack / Flue Outlet': new THREE.Vector3(0.9, 0.8, 0),
   'Safety Valve': new THREE.Vector3(0, 0.75, 0),
@@ -303,6 +306,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const components = new Map<string, THREE.Group>();
     const labelGroup = new THREE.Group();
     const flowGroup = new THREE.Group();
+    let flameOuter: THREE.Mesh | null = null;
+    let flameCoreMesh: THREE.Mesh | null = null;
     root.add(labelGroup, flowGroup);
 
     const component = (name: string) => {
@@ -458,15 +463,28 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Furnace Tube';
       const g = component(name);
-      const furnace = cylinderX(0.82, 6.7, material('#2b3338', 0.82, 0.38));
+      const furnaceMat = material('#2f383d', 0.86, 0.34, 1, undefined, darkSteelTex);
+      const furnace = cylinderX(0.82, 6.7, furnaceMat, mobileRender ? 36 : 52);
       furnace.position.y = -0.82;
       tagMaterial(furnace, 1, 'internal');
       mark(furnace, name);
       g.add(furnace);
 
-      const inner = cylinderX(0.68, 6.45, material('#8d2b10', 0.2, 0.5, 0.26, '#ff4e13'));
+      // Corrugation rings give the furnace a more realistic pressure-vessel reading.
+      const corrugationMat = material('#485259', 0.88, 0.30, 1, undefined, darkSteelTex);
+      const corrugationCount = mobileRender ? 7 : 11;
+      for (let i = 0; i < corrugationCount; i += 1) {
+        const x = -2.85 + i * (5.70 / Math.max(1, corrugationCount - 1));
+        const ring = cylinderX(0.855, 0.055, corrugationMat, mobileRender ? 28 : 40);
+        ring.position.set(x, -0.82, 0);
+        tagMaterial(ring, 1, 'internal');
+        mark(ring, name);
+        g.add(ring);
+      }
+
+      const inner = cylinderX(0.68, 6.45, material('#8d2b10', 0.15, 0.55, 0.22, '#ff4e13'));
       inner.position.y = -0.82;
-      tagMaterial(inner, 0.26, 'internal');
+      tagMaterial(inner, 0.22, 'internal');
       mark(inner, name);
       g.add(inner);
       addLabel(name, new THREE.Vector3(0.2, -0.85, 1.2));
@@ -699,6 +717,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       tagMaterial(flame, 0.72, 'internal');
       mark(flame, name);
       g.add(flame);
+      flameOuter = flame;
 
       const flameCore = new THREE.Mesh(
         new THREE.ConeGeometry(0.22, 1.75, mobileRender ? 14 : 22, 1, true),
@@ -710,6 +729,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       flameCore.userData.kind = 'internal';
       flameCore.userData.baseOpacity = 0.65;
       g.add(flameCore);
+      flameCoreMesh = flameCore;
 
       addLabel(name, new THREE.Vector3(-5.0, 0.45, 1.15));
     }
@@ -1445,6 +1465,15 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         const target = group.userData.targetPosition as THREE.Vector3 | undefined;
         if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
       });
+
+      if (flameOuter) {
+        const pulse = 1 + Math.sin(t * 9.2) * (mobileRender ? 0.018 : 0.028);
+        flameOuter.scale.set(1, pulse, pulse);
+      }
+      if (flameCoreMesh) {
+        const corePulse = 1 + Math.sin(t * 11.4 + 0.8) * (mobileRender ? 0.015 : 0.024);
+        flameCoreMesh.scale.set(1, corePulse, corePulse);
+      }
 
       if (flowGroup.visible && (!mobileRender || now - lastFrame > 24)) {
         flowGroup.children.forEach((child) => {

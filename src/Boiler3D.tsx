@@ -854,120 +854,371 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Safety Valve';
       const g = component(name);
-      const pipe = cylinderY(0.16, 0.52, material('#a4b2b8', 0.86, 0.25));
-      pipe.position.set(0.25, 2.55, 0.25);
-      tagMaterial(pipe, 1, 'utility');
-      mark(pipe, name);
-      g.add(pipe);
-      addValve(g, new THREE.Vector3(0.25, 2.95, 0.25), 0.95);
-      g.traverse(o => { if (o instanceof THREE.Mesh) mark(o, name); });
-      addLabel(name, new THREE.Vector3(0.25, 3.85, 0.25));
+      const steelMat = material('#9aa8ae', 0.90, 0.24, 1, undefined, stainlessTex);
+      const bodyMat = material('#65757c', 0.82, 0.32, 1, undefined, paintedSteelTex);
+
+      const nozzle = cylinderY(0.16, 0.48, steelMat, 20);
+      nozzle.position.set(0.25, 2.56, 0.25);
+      tagMaterial(nozzle, 1, 'utility');
+      mark(nozzle, name);
+      g.add(nozzle);
+
+      const lowerBody = new THREE.Mesh(new THREE.SphereGeometry(0.24, mobileRender ? 16 : 24, mobileRender ? 10 : 16), bodyMat);
+      lowerBody.scale.set(0.88, 1.0, 0.88);
+      lowerBody.position.set(0.25, 2.91, 0.25);
+      tagMaterial(lowerBody, 1, 'utility');
+      mark(lowerBody, name);
+      g.add(lowerBody);
+
+      const bonnet = cylinderY(0.16, 0.55, steelMat, 20);
+      bonnet.position.set(0.25, 3.28, 0.25);
+      tagMaterial(bonnet, 1, 'utility');
+      mark(bonnet, name);
+      g.add(bonnet);
+
+      const cap = cylinderY(0.205, 0.10, bodyMat, 20);
+      cap.position.set(0.25, 3.59, 0.25);
+      tagMaterial(cap, 1, 'utility');
+      mark(cap, name);
+      g.add(cap);
+
+      const outlet = cylinderBetween(
+        new THREE.Vector3(0.25, 3.00, 0.42),
+        new THREE.Vector3(0.25, 3.00, 1.06),
+        0.11,
+        steelMat,
+        16,
+      );
+      tagMaterial(outlet, 1, 'utility');
+      mark(outlet, name);
+      g.add(outlet);
+
+      const outletFlange = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.027, 8, 24), steelMat);
+      outletFlange.rotation.x = Math.PI / 2;
+      outletFlange.position.set(0.25, 3.00, 1.07);
+      tagMaterial(outletFlange, 1, 'utility');
+      mark(outletFlange, name);
+      g.add(outletFlange);
+
+      addLabel(name, new THREE.Vector3(0.25, 3.95, 0.25));
     }
 
     // STEAM OUTLET
     {
       const name = 'Steam Outlet';
       const g = component(name);
-      const vertical = cylinderY(0.22, 0.85, material('#94a6af', 0.85, 0.27));
-      vertical.position.set(1.45, 2.65, -0.3);
+      const pipeMat = material('#9aa8ae', 0.90, 0.25, 1, undefined, stainlessTex);
+      const valveMat = material('#60727b', 0.82, 0.32, 1, undefined, paintedSteelTex);
+
+      const vertical = cylinderY(0.22, 0.92, pipeMat, 24);
+      vertical.position.set(1.45, 2.70, -0.30);
       tagMaterial(vertical, 1, 'utility');
       mark(vertical, name);
       g.add(vertical);
-      addValve(g, new THREE.Vector3(1.45, 3.0, -0.3), 0.85);
+
+      const lowerFlange = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.040, 9, 28), pipeMat);
+      lowerFlange.rotation.x = Math.PI / 2;
+      lowerFlange.position.set(1.45, 2.28, -0.30);
+      tagMaterial(lowerFlange, 1, 'utility');
+      mark(lowerFlange, name);
+      g.add(lowerFlange);
+
+      addValve(g, new THREE.Vector3(1.45, 3.03, -0.30), 0.88);
+
+      const topSpool = cylinderY(0.20, 0.62, pipeMat, 22);
+      topSpool.position.set(1.45, 3.62, -0.30);
+      tagMaterial(topSpool, 1, 'utility');
+      mark(topSpool, name);
+      g.add(topSpool);
+
+      const outletElbowA = cylinderBetween(
+        new THREE.Vector3(1.45, 3.88, -0.30),
+        new THREE.Vector3(1.95, 3.88, -0.30),
+        0.18,
+        pipeMat,
+        18,
+      );
+      tagMaterial(outletElbowA, 1, 'utility');
+      mark(outletElbowA, name);
+      g.add(outletElbowA);
+
+      const valveBody = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 12), valveMat);
+      valveBody.position.set(1.45, 3.03, -0.30);
+      tagMaterial(valveBody, 1, 'utility');
+      mark(valveBody, name);
+      g.add(valveBody);
+
       g.traverse(o => { if (o instanceof THREE.Mesh) mark(o, name); });
-      addLabel(name, new THREE.Vector3(1.55, 3.9, -0.35));
+      addLabel(name, new THREE.Vector3(1.62, 4.45, -0.35));
     }
 
     // PRESSURE CONTROLS
     {
       const name = 'Pressure Controls';
       const g = component(name);
+      const pipeMat = material('#9aa8ae', 0.88, 0.27, 1, undefined, stainlessTex);
+      const enclosureMat = material('#526c79', 0.54, 0.44, 1, undefined, paintedSteelTex);
+      const bezelMat = material('#273238', 0.80, 0.32, 1, undefined, darkSteelTex);
+
       [-1.25, -0.75].forEach((x, i) => {
-        const stem = cylinderY(0.06, 0.35, material('#9aa9b0', 0.8, 0.3));
-        stem.position.set(x, 2.5, -0.45);
+        const stem = cylinderY(0.06, 0.40, pipeMat, 14);
+        stem.position.set(x, 2.52, -0.45);
         tagMaterial(stem, 1, 'utility');
         mark(stem, name);
         g.add(stem);
-        const sensor = box(0.34, 0.44, 0.28, material(i ? '#52738a' : '#6c7880', 0.55, 0.45));
-        sensor.position.set(x, 2.88, -0.45);
+
+        const sensor = box(0.36, 0.46, 0.30, enclosureMat);
+        sensor.position.set(x, 2.92, -0.45);
         tagMaterial(sensor, 1, 'utility');
         mark(sensor, name);
         g.add(sensor);
+
+        const capillary = cylinderBetween(
+          new THREE.Vector3(x, 2.72, -0.45),
+          new THREE.Vector3(x + (i === 0 ? -0.15 : 0.15), 2.35, -0.20),
+          0.018,
+          pipeMat,
+          8,
+        );
+        tagMaterial(capillary, 1, 'utility');
+        mark(capillary, name);
+        g.add(capillary);
       });
-      const gauge = cylinderX(0.34, 0.15, material('#d1d9dd', 0.45, 0.4), 32);
-      gauge.position.set(-1.75, 2.75, -0.5);
-      gauge.rotation.y = Math.PI / 2;
-      tagMaterial(gauge, 1, 'utility');
-      mark(gauge, name);
-      g.add(gauge);
-      addLabel(name, new THREE.Vector3(-1.2, 3.55, -0.45));
+
+      const gaugeBody = cylinderX(0.36, 0.16, bezelMat, 36);
+      gaugeBody.position.set(-1.78, 2.82, -0.52);
+      tagMaterial(gaugeBody, 1, 'utility');
+      mark(gaugeBody, name);
+      g.add(gaugeBody);
+
+      const dial = new THREE.Mesh(
+        new THREE.CircleGeometry(0.30, mobileRender ? 24 : 36),
+        new THREE.MeshBasicMaterial({ color: '#eef2f2', side: THREE.DoubleSide }),
+      );
+      dial.rotation.y = Math.PI / 2;
+      dial.position.set(-1.875, 2.82, -0.52);
+      dial.userData.component = name;
+      dial.userData.kind = 'utility';
+      dial.userData.baseOpacity = 1;
+      g.add(dial);
+
+      const needle = box(0.015, 0.18, 0.018, material('#bb3a2f', 0.20, 0.45));
+      needle.position.set(-1.890, 2.88, -0.52);
+      needle.rotation.x = -0.55;
+      tagMaterial(needle, 1, 'utility');
+      mark(needle, name);
+      g.add(needle);
+
+      addLabel(name, new THREE.Vector3(-1.22, 3.65, -0.45));
     }
 
     // LEVEL GAUGE
     {
       const name = 'Level Gauge';
       const g = component(name);
-      const glass = cylinderY(0.09, 1.9, material('#67d7ff', 0.08, 0.12, 0.55));
-      glass.position.set(-2.25, 0.5, 2.48);
-      tagMaterial(glass, 0.55, 'utility');
-      mark(glass, name);
-      g.add(glass);
-      [-0.45, 1.45].forEach(y => {
-        const conn = cylinderY(0.15, 0.28, material('#8b999f', 0.8, 0.3));
-        conn.position.set(-2.25, y, 2.48);
-        tagMaterial(conn, 1, 'utility');
-        mark(conn, name);
-        g.add(conn);
+      const metalMat = material('#8f9ca2', 0.86, 0.28, 1, undefined, stainlessTex);
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: '#7ddcff',
+        roughness: 0.08,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.50,
+        transmission: mobileRender ? 0 : 0.35,
+        thickness: 0.12,
+        clearcoat: 0.10,
       });
-      addLabel(name, new THREE.Vector3(-2.3, 2.0, 2.65));
+      const guardMat = material('#515f66', 0.78, 0.36, 1, undefined, darkSteelTex);
+
+      // The project source describes at least two level glasses; show a twin external arrangement.
+      [-2.48, -2.08].forEach((x, index) => {
+        const glass = cylinderY(0.075, 1.82, glassMat.clone(), 18);
+        glass.position.set(x, 0.52, 2.50);
+        tagMaterial(glass, 0.50, 'utility');
+        mark(glass, name);
+        g.add(glass);
+
+        [-0.40, 1.44].forEach(y => {
+          const cock = cylinderY(0.13, 0.28, metalMat, 16);
+          cock.position.set(x, y, 2.50);
+          tagMaterial(cock, 1, 'utility');
+          mark(cock, name);
+          g.add(cock);
+
+          const connector = cylinderBetween(
+            new THREE.Vector3(x, y, 2.43),
+            new THREE.Vector3(x, y, 2.18),
+            0.055,
+            metalMat,
+            10,
+          );
+          tagMaterial(connector, 1, 'utility');
+          mark(connector, name);
+          g.add(connector);
+        });
+
+        [-0.12, 0.12].forEach(dx => {
+          const guard = cylinderY(0.020, 1.95, guardMat, 8);
+          guard.position.set(x + dx, 0.52, 2.57);
+          tagMaterial(guard, 1, 'utility');
+          mark(guard, name);
+          g.add(guard);
+        });
+
+        const drain = cylinderBetween(
+          new THREE.Vector3(x, -0.53, 2.50),
+          new THREE.Vector3(x, -0.86, 2.72 + index * 0.05),
+          0.035,
+          metalMat,
+          9,
+        );
+        tagMaterial(drain, 1, 'utility');
+        mark(drain, name);
+        g.add(drain);
+      });
+
+      addLabel(name, new THREE.Vector3(-2.30, 2.05, 2.72));
     }
 
     // FEEDWATER
     {
       const name = 'Feedwater Inlet';
       const g = component(name);
-      const inlet = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.35, 24), material('#5baecf', 0.72, 0.32));
-      inlet.rotation.x = Math.PI / 2;
-      inlet.position.set(2.15, 0.75, 2.65);
+      const waterPipeMat = material('#5baecf', 0.72, 0.30, 1, undefined, paintedSteelTex);
+      const steelMat = material('#85959d', 0.86, 0.28, 1, undefined, stainlessTex);
+      const valveBodyMat = material('#5b6e77', 0.80, 0.34, 1, undefined, darkSteelTex);
+
+      const inlet = cylinderBetween(
+        new THREE.Vector3(2.15, 0.75, 2.18),
+        new THREE.Vector3(2.15, 0.75, 3.78),
+        0.15,
+        waterPipeMat,
+        20,
+      );
       tagMaterial(inlet, 1, 'utility');
       mark(inlet, name);
       g.add(inlet);
-      addValve(g, new THREE.Vector3(2.15, 0.75, 3.15), 0.68);
+
+      addValve(g, new THREE.Vector3(2.15, 0.75, 3.12), 0.68);
+
+      // Non-return/check valve body.
+      const checkBody = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 12), valveBodyMat);
+      checkBody.scale.set(0.95, 0.80, 1.25);
+      checkBody.position.set(2.15, 0.75, 3.53);
+      tagMaterial(checkBody, 1, 'utility');
+      mark(checkBody, name);
+      g.add(checkBody);
+
+      const checkBand = new THREE.Mesh(new THREE.TorusGeometry(0.20, 0.035, 8, 22), steelMat);
+      checkBand.position.set(2.15, 0.75, 3.53);
+      tagMaterial(checkBand, 1, 'utility');
+      mark(checkBand, name);
+      g.add(checkBand);
+
+      // Y-strainer branch.
+      const strainerBranch = cylinderBetween(
+        new THREE.Vector3(2.15, 0.75, 3.70),
+        new THREE.Vector3(2.52, 0.38, 3.95),
+        0.10,
+        valveBodyMat,
+        16,
+      );
+      tagMaterial(strainerBranch, 1, 'utility');
+      mark(strainerBranch, name);
+      g.add(strainerBranch);
+
+      const strainerCap = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), steelMat);
+      strainerCap.position.set(2.53, 0.37, 3.96);
+      tagMaterial(strainerCap, 1, 'utility');
+      mark(strainerCap, name);
+      g.add(strainerCap);
+
       g.traverse(o => { if (o instanceof THREE.Mesh) mark(o, name); });
-      addLabel(name, new THREE.Vector3(2.15, 1.65, 3.1));
+      addLabel(name, new THREE.Vector3(2.25, 1.65, 3.45));
     }
 
     // BLOWDOWN
     {
       const name = 'Blowdown Valve';
       const g = component(name);
-      const down = cylinderY(0.14, 1.0, material('#8f9ba0', 0.82, 0.3));
-      down.position.set(0.1, -2.75, 0.35);
+      const pipeMat = material('#87959c', 0.86, 0.29, 1, undefined, stainlessTex);
+      const darkMat = material('#51646d', 0.80, 0.36, 1, undefined, darkSteelTex);
+
+      const down = cylinderY(0.14, 1.10, pipeMat, 18);
+      down.position.set(0.10, -2.76, 0.35);
       tagMaterial(down, 1, 'utility');
       mark(down, name);
       g.add(down);
-      addValve(g, new THREE.Vector3(0.1, -3.3, 0.35), 0.72);
+
+      const elbow = cylinderBetween(
+        new THREE.Vector3(0.10, -3.20, 0.35),
+        new THREE.Vector3(0.80, -3.20, 0.35),
+        0.13,
+        pipeMat,
+        16,
+      );
+      tagMaterial(elbow, 1, 'utility');
+      mark(elbow, name);
+      g.add(elbow);
+
+      addValve(g, new THREE.Vector3(0.42, -3.20, 0.35), 0.68);
+
+      const secondBody = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 10), darkMat);
+      secondBody.position.set(0.86, -3.20, 0.35);
+      tagMaterial(secondBody, 1, 'utility');
+      mark(secondBody, name);
+      g.add(secondBody);
+
+      const discharge = cylinderBetween(
+        new THREE.Vector3(0.90, -3.20, 0.35),
+        new THREE.Vector3(1.45, -3.20, 0.35),
+        0.12,
+        pipeMat,
+        16,
+      );
+      tagMaterial(discharge, 1, 'utility');
+      mark(discharge, name);
+      g.add(discharge);
+
       g.traverse(o => { if (o instanceof THREE.Mesh) mark(o, name); });
-      addLabel(name, new THREE.Vector3(0.1, -3.85, 0.4));
+      addLabel(name, new THREE.Vector3(0.45, -3.85, 0.45));
     }
 
     // LEVEL SENSORS
     {
       const name = 'Level Sensors';
       const g = component(name);
-      [-0.25, 0.15].forEach((dx, i) => {
-        const probe = cylinderY(0.055, 0.85 + i * 0.18, material('#c5b05f', 0.72, 0.3));
-        probe.position.set(-0.15 + dx, 2.3, 1.0);
+      const probeMat = material('#c4aa58', 0.72, 0.30);
+      const headMat = material('#586e79', 0.62, 0.40, 1, undefined, paintedSteelTex);
+      const ceramicMat = material('#ddd9c8', 0.05, 0.62);
+
+      [-0.42, -0.02, 0.38].forEach((dx, i) => {
+        const probeLength = 0.82 + i * 0.14;
+        const probe = cylinderY(0.045, probeLength, probeMat, 12);
+        probe.position.set(-0.12 + dx, 2.22, 1.02);
         tagMaterial(probe, 1, 'utility');
         mark(probe, name);
         g.add(probe);
-        const head = box(0.24, 0.22, 0.24, material('#586e79', 0.6, 0.42));
-        head.position.set(-0.15 + dx, 2.75, 1.0);
+
+        const insulator = cylinderY(0.085, 0.18, ceramicMat, 14);
+        insulator.position.set(-0.12 + dx, 2.66, 1.02);
+        tagMaterial(insulator, 1, 'utility');
+        mark(insulator, name);
+        g.add(insulator);
+
+        const head = box(0.24, 0.22, 0.24, headMat);
+        head.position.set(-0.12 + dx, 2.83, 1.02);
         tagMaterial(head, 1, 'utility');
         mark(head, name);
         g.add(head);
       });
-      addLabel(name, new THREE.Vector3(-0.15, 3.35, 1.1));
+
+      const junction = box(1.30, 0.18, 0.34, headMat);
+      junction.position.set(-0.12, 3.04, 1.02);
+      tagMaterial(junction, 1, 'utility');
+      mark(junction, name);
+      g.add(junction);
+
+      addLabel(name, new THREE.Vector3(-0.15, 3.55, 1.15));
     }
 
     // Flow particles: hot gas + water/steam indication

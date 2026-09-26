@@ -144,8 +144,8 @@ function makeLabel(text: string) {
   canvas.height = 96;
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'rgba(3,17,28,.90)';
-  ctx.strokeStyle = 'rgba(78,190,247,.65)';
+  ctx.fillStyle = 'rgba(6,28,44,.82)';
+  ctx.strokeStyle = 'rgba(104,211,255,.92)';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.roundRect(4, 4, 504, 88, 16);
@@ -154,7 +154,7 @@ function makeLabel(text: string) {
   ctx.font = '700 28px Inter, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#e9f5fb';
+  ctx.fillStyle = '#f8fdff';
   ctx.fillText(text, 256, 48);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -171,8 +171,8 @@ function makeDetailLabel(text: string) {
   canvas.height = 76;
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'rgba(3,17,28,.93)';
-  ctx.strokeStyle = 'rgba(255,145,48,.72)';
+  ctx.fillStyle = 'rgba(8,30,46,.86)';
+  ctx.strokeStyle = 'rgba(255,160,64,.94)';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.roundRect(4, 4, 412, 68, 12);
@@ -181,7 +181,7 @@ function makeDetailLabel(text: string) {
   ctx.font = '700 23px Inter, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#fff3e6';
+  ctx.fillStyle = '#fff9f2';
   ctx.fillText(text, 210, 39);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -230,8 +230,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     if (!host) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#07141f');
-    scene.fog = new THREE.FogExp2('#07141f', 0.021);
+    scene.background = new THREE.Color('#0a2234');
+    scene.fog = new THREE.Fog('#0a2234', 18, 46);
 
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(70, 20, 10),
@@ -239,7 +239,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         side: THREE.BackSide,
         depthWrite: false,
         vertexShader: 'varying vec3 vPos; void main(){ vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-        fragmentShader: 'varying vec3 vPos; void main(){ float h=normalize(vPos).y*0.5+0.5; vec3 low=vec3(0.02,0.045,0.065); vec3 mid=vec3(0.045,0.11,0.16); vec3 high=vec3(0.08,0.18,0.25); vec3 col=mix(low,mid,smoothstep(0.12,0.58,h)); col=mix(col,high,smoothstep(0.58,1.0,h)); gl_FragColor=vec4(col,1.0); }',
+        fragmentShader: 'varying vec3 vPos; void main(){ float h=normalize(vPos).y*0.5+0.5; vec3 low=vec3(0.035,0.085,0.125); vec3 mid=vec3(0.070,0.165,0.235); vec3 high=vec3(0.12,0.27,0.36); vec3 col=mix(low,mid,smoothstep(0.12,0.58,h)); col=mix(col,high,smoothstep(0.58,1.0,h)); gl_FragColor=vec4(col,1.0); }',
       }),
     );
     scene.add(sky);
@@ -257,7 +257,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.24;
+    renderer.toneMappingExposure = 1.70;
     renderer.localClippingEnabled = true;
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.userSelect = 'none';
@@ -302,15 +302,35 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     };
     updateCamera();
 
-    scene.add(new THREE.HemisphereLight('#a9d9ef', '#06111b', mobileRender ? 1.35 : 1.2));
-    const key = new THREE.DirectionalLight('#cfeeff', mobileRender ? 1.9 : 2.4);
+    const ambient = new THREE.AmbientLight('#a9dcff', mobileRender ? 1.10 : 1.20);
+    scene.add(ambient);
+
+    const hemi = new THREE.HemisphereLight('#b8e5ff', '#102332', mobileRender ? 1.28 : 1.35);
+    hemi.position.set(0, 12, 0);
+    scene.add(hemi);
+
+    const key = new THREE.DirectionalLight('#ffffff', mobileRender ? 2.05 : 2.35);
     key.position.set(-7, 10, 9);
     key.castShadow = !mobileRender;
     scene.add(key);
-    const rim = new THREE.DirectionalLight('#2fa8e4', 1.2);
-    rim.position.set(8, 4, -9);
+
+    const fill = new THREE.DirectionalLight('#8ed2ff', mobileRender ? 1.00 : 1.28);
+    fill.position.set(8, 5, 7);
+    scene.add(fill);
+
+    const rim = new THREE.DirectionalLight('#58bfff', mobileRender ? 0.85 : 1.10);
+    rim.position.set(8, 6, -9);
     scene.add(rim);
-    const fireLight = new THREE.PointLight('#ff6b1a', 3.2, 14, 2);
+
+    const topLight = new THREE.PointLight('#c8eaff', mobileRender ? 0.78 : 1.12, 28, 2);
+    topLight.position.set(0, 6.0, 0);
+    scene.add(topLight);
+
+    const frontLift = new THREE.PointLight('#d7efff', mobileRender ? 0.58 : 0.85, 22, 2);
+    frontLift.position.set(-6.5, 2.5, 6.5);
+    scene.add(frontLift);
+
+    const fireLight = new THREE.PointLight('#ff7624', mobileRender ? 2.65 : 3.25, 14, 2);
     fireLight.position.set(-2.4, -0.7, 0);
     scene.add(fireLight);
 
@@ -326,16 +346,16 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(12.8, mobileRender ? 40 : 72),
-      new THREE.MeshStandardMaterial({ color: '#0b1820', map: concreteTex, metalness: 0.08, roughness: 0.88 }),
+      new THREE.MeshStandardMaterial({ color: '#17313e', map: concreteTex, metalness: 0.08, roughness: 0.82 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -3.17;
     ground.receiveShadow = !mobileRender;
     scene.add(ground);
 
-    const grid = new THREE.GridHelper(30, 30, '#1c5a78', '#123348');
+    const grid = new THREE.GridHelper(30, 30, '#2c789c', '#1b4b66');
     grid.position.y = -3.145;
-    (grid.material as THREE.Material).opacity = 0.20;
+    (grid.material as THREE.Material).opacity = 0.28;
     (grid.material as THREE.Material).transparent = true;
     scene.add(grid);
 
@@ -390,9 +410,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Boiler Shell';
       const g = component(name);
-      const shellMat = material('#65747b', 0.80, 0.34, 1, undefined, paintedSteelTex);
-      const seamMat = material('#9aa6ac', 0.88, 0.26, 1, undefined, stainlessTex);
-      const supportMat = material('#394850', 0.82, 0.44, 1, undefined, darkSteelTex);
+      const shellMat = material('#7c8e96', 0.78, 0.31, 1, undefined, paintedSteelTex);
+      const seamMat = material('#b3c1c8', 0.86, 0.23, 1, undefined, stainlessTex);
+      const supportMat = material('#52646e', 0.80, 0.40, 1, undefined, darkSteelTex);
 
       const shell = cylinderX(2.35, 8.1, shellMat, mobileRender ? 44 : 72);
       shell.castShadow = !mobileRender;
@@ -456,7 +476,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         mark(pedestal, name);
         g.add(pedestal);
 
-        const baseplate = box(1.45, 0.12, 3.25, material('#2b373d', 0.82, 0.48, 1, undefined, darkSteelTex));
+        const baseplate = box(1.45, 0.12, 3.25, material('#40535d', 0.80, 0.43, 1, undefined, darkSteelTex));
         baseplate.position.set(x, -3.05, 0);
         tagMaterial(baseplate, 1, 'utility');
         mark(baseplate, name);
@@ -512,7 +532,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Furnace Tube';
       const g = component(name);
-      const furnaceMat = material('#2f383d', 0.86, 0.34, 1, undefined, darkSteelTex);
+      const furnaceMat = material('#46545c', 0.84, 0.31, 1, undefined, darkSteelTex);
       const furnace = cylinderX(0.82, 6.7, furnaceMat, mobileRender ? 36 : 52);
       furnace.position.y = -0.82;
       tagMaterial(furnace, 1, 'internal');
@@ -520,7 +540,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       g.add(furnace);
 
       // Corrugation rings give the furnace a more realistic pressure-vessel reading.
-      const corrugationMat = material('#485259', 0.88, 0.30, 1, undefined, darkSteelTex);
+      const corrugationMat = material('#64727a', 0.86, 0.27, 1, undefined, darkSteelTex);
       const corrugationCount = mobileRender ? 7 : 11;
       for (let i = 0; i < corrugationCount; i += 1) {
         const x = -2.85 + i * (5.70 / Math.max(1, corrugationCount - 1));
@@ -585,9 +605,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Front Smokebox';
       const g = component(name);
-      const casingMat = material('#46575f', 0.82, 0.36, 1, undefined, darkSteelTex);
-      const doorMat = material('#66757c', 0.86, 0.30, 1, undefined, paintedSteelTex);
-      const trimMat = material('#a0aaae', 0.90, 0.24, 1, undefined, stainlessTex);
+      const casingMat = material('#5f737e', 0.80, 0.32, 1, undefined, darkSteelTex);
+      const doorMat = material('#7d9099', 0.84, 0.27, 1, undefined, paintedSteelTex);
+      const trimMat = material('#bac5ca', 0.88, 0.22, 1, undefined, stainlessTex);
 
       const smoke = cylinderX(2.20, 0.66, casingMat, mobileRender ? 40 : 60);
       smoke.position.x = -3.82;
@@ -650,9 +670,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const name = 'Burner & Ignition';
       const g = component(name);
 
-      const paintedMat = material('#718994', 0.74, 0.31, 1, undefined, paintedSteelTex);
-      const darkMat = material('#465760', 0.76, 0.36, 1, undefined, darkSteelTex);
-      const trimMat = material('#b9c5ca', 0.90, 0.22, 1, undefined, stainlessTex);
+      const paintedMat = material('#88a0ab', 0.72, 0.28, 1, undefined, paintedSteelTex);
+      const darkMat = material('#5d7079', 0.74, 0.32, 1, undefined, darkSteelTex);
+      const trimMat = material('#d0d9dd', 0.88, 0.20, 1, undefined, stainlessTex);
       const brassMat = material('#c89549', 0.68, 0.28);
       const pilotPipeMat = material('#e0bb61', 0.70, 0.25);
       const mainFuelMat = material('#a9633e', 0.72, 0.32);

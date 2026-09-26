@@ -106,13 +106,15 @@ export function addBoltRingX(
   boltMaterial: THREE.Material,
   componentName: string,
   boltRadius = 0.055,
+  centerY = 0,
+  centerZ = 0,
 ) {
   const geometry = new THREE.CylinderGeometry(boltRadius, boltRadius, 0.10, 10);
   for (let i = 0; i < count; i += 1) {
     const angle = (i / count) * Math.PI * 2;
     const bolt = new THREE.Mesh(geometry, boltMaterial);
     bolt.rotation.z = Math.PI / 2;
-    bolt.position.set(x, Math.sin(angle) * radius, Math.cos(angle) * radius);
+    bolt.position.set(x, centerY + Math.sin(angle) * radius, centerZ + Math.cos(angle) * radius);
     bolt.userData.component = componentName;
     bolt.userData.kind = 'utility';
     bolt.userData.baseOpacity = 1;

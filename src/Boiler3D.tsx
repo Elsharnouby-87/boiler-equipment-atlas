@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { CameraCommand, ContextMode, ViewMode } from './modelTypes';
+import { addBoltRingX, addFlangeX, cylinderBetween, makeBoilerSurfaceTexture } from './boiler3d/sceneHelpers';
 
 type Props = {
   mode: ViewMode;
@@ -91,9 +92,11 @@ function material(
   roughness = 0.42,
   opacity = 1,
   emissive?: THREE.ColorRepresentation,
+  map?: THREE.Texture,
 ) {
   const m = new THREE.MeshPhysicalMaterial({
     color,
+    map,
     metalness,
     roughness,
     transparent: opacity < 1,
@@ -226,6 +229,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.userSelect = 'none';
     host.appendChild(renderer.domElement);
+
+    const paintedSteelTex = makeBoilerSurfaceTexture('paintedSteel', mobileRender);
+    const darkSteelTex = makeBoilerSurfaceTexture('darkSteel', mobileRender);
+    const stainlessTex = makeBoilerSurfaceTexture('stainless', mobileRender);
+    const refractoryTex = makeBoilerSurfaceTexture('refractory', mobileRender);
+    const concreteTex = makeBoilerSurfaceTexture('concrete', mobileRender);
+    const generatedTextures = [paintedSteelTex, darkSteelTex, stainlessTex, refractoryTex, concreteTex];
 
     const orbit: OrbitState = {
       yaw: -0.76,
@@ -913,6 +923,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           sm.dispose();
         }
       });
+      generatedTextures.forEach(texture => texture.dispose());
       renderer.dispose();
       if (renderer.domElement.parentElement === host) host.removeChild(renderer.domElement);
       stateRef.current = null;

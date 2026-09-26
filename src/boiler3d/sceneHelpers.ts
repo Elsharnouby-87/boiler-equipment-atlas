@@ -124,6 +124,10 @@ export function makeFlameMaterial(
           sin(uTime * 11.2 + p.y * 7.1 + uSeed * 2.3) * 0.010;
         p.x += sway * rootLock * (0.18 + tip * 1.15);
         p.z += cos(uTime * 4.0 + p.y * 2.6 + uSeed) * 0.040 * rootLock * (0.12 + tip);
+        p.y += (
+          sin(vUv.x * 12.566 + uTime * 5.2 + uSeed) * 0.085 +
+          sin(vUv.x * 25.132 - uTime * 7.1 + uSeed * 1.9) * 0.035
+        ) * smoothstep(0.58, 1.0, axial);
         p.x *= 0.97 + sin(uTime * 6.1 + p.y * 3.6 + uSeed) * 0.032 * axial;
         p.z *= 0.98 + cos(uTime * 6.8 + p.y * 3.2 + uSeed) * 0.028 * axial;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -143,7 +147,7 @@ export function makeFlameMaterial(
         float turbulence = mix(bandA, bandB, 0.44);
         float rootFade = smoothstep(0.0, 0.055, vUv.y);
         float tipFade = 1.0 - smoothstep(0.72, 1.0, vUv.y);
-        float edgeLife = rootFade * max(0.10, tipFade);
+        float edgeLife = rootFade * max(0.035, tipFade);
         float tipFlicker = 0.82 + 0.18 * sin(uTime * 11.5 + uSeed * 4.0 + vUv.y * 10.0);
         float alpha = (0.24 + turbulence * 0.56) * edgeLife * uOpacity * uContextOpacity;
         alpha *= mix(1.0, tipFlicker, smoothstep(0.48, 1.0, vUv.y));
@@ -155,7 +159,7 @@ export function makeFlameMaterial(
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
   });
 }
 

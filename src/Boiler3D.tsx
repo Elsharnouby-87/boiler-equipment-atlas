@@ -1034,7 +1034,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
             new THREE.Vector3(-4.82, -0.20, -0.38),
             new THREE.Vector3(-4.68, -0.32, -0.30),
           ]),
-          mobileRender ? 14 : 24,
+          mobileRender ? 18 : 32,
           0.022,
           7,
           false,
@@ -1112,7 +1112,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         seed: number,
         yOffset = 0,
         zOffset = 0,
-        radialSegments = mobileRender ? 16 : 26,
+        radialSegments = mobileRender ? 18 : 34,
       ) => {
         const mesh = new THREE.Mesh(
           makeFlameEnvelopeGeometry(length, profile, radialSegments),
@@ -1132,9 +1132,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addFlameLayer(
         5.05,
         [[0, 0.11], [0.08, 0.40], [0.20, 0.61], [0.38, 0.70], [0.56, 0.58], [0.73, 0.43], [0.90, 0.22], [1, 0.018]],
-        '#ff4a12',
-        '#8e1408',
-        mobileRender ? 0.34 : 0.42,
+        '#ff8a28',
+        '#ff4218',
+        mobileRender ? 0.21 : 0.25,
         2.2,
         0.02,
         0.00,
@@ -1144,9 +1144,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addFlameLayer(
         4.48,
         [[0, 0.10], [0.08, 0.31], [0.21, 0.52], [0.40, 0.58], [0.58, 0.48], [0.76, 0.32], [0.92, 0.15], [1, 0.014]],
-        '#ffc84a',
-        '#ff5a14',
-        mobileRender ? 0.68 : 0.78,
+        '#ffd85a',
+        '#ff731c',
+        mobileRender ? 0.52 : 0.62,
         4.8,
         -0.015,
         -0.015,
@@ -1155,9 +1155,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addFlameLayer(
         2.78,
         [[0, 0.065], [0.10, 0.19], [0.30, 0.31], [0.52, 0.29], [0.74, 0.19], [0.92, 0.08], [1, 0.010]],
-        '#fff7c5',
-        '#ffb43b',
-        mobileRender ? 0.74 : 0.86,
+        '#fff9d8',
+        '#ffc34a',
+        mobileRender ? 0.62 : 0.72,
         7.1,
         0.005,
         0.018,
@@ -1167,9 +1167,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addFlameLayer(
         1.08,
         [[0, 0.035], [0.10, 0.11], [0.30, 0.21], [0.55, 0.18], [0.80, 0.09], [1, 0.008]],
-        '#fffde8',
-        '#ffd45c',
-        mobileRender ? 0.82 : 0.94,
+        '#fffdf0',
+        '#ffe073',
+        mobileRender ? 0.72 : 0.82,
         9.6,
         0,
         0,
@@ -1707,11 +1707,23 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     // Flow particles: generic boiler flow plus a dedicated burner learning overlay.
     const hotMat = material('#ff8c38', 0.0, 0.2, 0.85, '#ff4e13');
     const blueMat = material('#53c8f5', 0.0, 0.2, 0.72, '#1aa6e1');
-    const burnerAirMat = material('#66d8ff', 0.0, 0.16, 0.88, '#2bc8ff');
-    const burnerFuelMat = material('#ffb45e', 0.0, 0.18, 0.90, '#ff7a22');
+    const burnerAirMat = new THREE.MeshBasicMaterial({
+      color: '#66dcff',
+      transparent: true,
+      opacity: 0.92,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const burnerFuelMat = new THREE.MeshBasicMaterial({
+      color: '#ffb35c',
+      transparent: true,
+      opacity: 0.94,
+      depthTest: false,
+      depthWrite: false,
+    });
     const hotGeometry = new THREE.SphereGeometry(0.055, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
     const waterGeometry = new THREE.SphereGeometry(0.05, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
-    const burnerFlowGeometry = new THREE.SphereGeometry(mobileRender ? 0.055 : 0.070, mobileRender ? 5 : 8, mobileRender ? 5 : 8);
+    const burnerFlowGeometry = new THREE.SphereGeometry(mobileRender ? 0.060 : 0.078, mobileRender ? 5 : 8, mobileRender ? 5 : 8);
     const hotCount = mobileRender ? 14 : 24;
     const waterCount = mobileRender ? 10 : 16;
     for (let i = 0; i < hotCount; i += 1) {
@@ -1732,6 +1744,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       p.userData.phase = i / burnerAirCount;
       p.userData.flowType = 'burnerAir';
       p.visible = false;
+      p.renderOrder = 80;
       flowGroup.add(p);
     }
     const burnerFuelCount = mobileRender ? 5 : 9;
@@ -1741,6 +1754,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       p.userData.flowType = 'burnerFuel';
       p.userData.fuelPath = i % 3 === 0 ? 'pilot' : 'main';
       p.visible = false;
+      p.renderOrder = 80;
       flowGroup.add(p);
     }
     flowGroup.visible = false;

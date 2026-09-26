@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Flame, Gauge, ShieldAlert, Waves } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Flame, Gauge, ShieldAlert, Waves, X } from 'lucide-react';
 import Boiler3D from './Boiler3D';
 import GlobalNavigation, { type NavigationTarget } from './GlobalNavigation';
 import type { CameraCommand, ContextMode, ViewMode } from './modelTypes';
@@ -152,6 +152,7 @@ const stages: OperationStage[] = [
 
 export default function OperationPage({ onBack, onNavigate }: Props) {
   const [stageIndex, setStageIndex] = useState(0);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [cameraCommand, setCameraCommand] = useState<CameraCommand>({ id: 1, action: 'fitBoiler' });
   const stage = stages[stageIndex];
 
@@ -227,6 +228,24 @@ export default function OperationPage({ onBack, onNavigate }: Props) {
           <div className="burner-center-tabs">
             {status.map(item => <button key={item} className="active">{item}</button>)}
           </div>
+
+          <div className="study-mobile-actions operation-mobile-actions">
+            <button disabled={stageIndex === 0} onClick={() => selectStage(Math.max(0, stageIndex - 1))}>← Previous</button>
+            <button className="active" onClick={() => setMobileOpen(true)}>Stage Details</button>
+            <button disabled={stageIndex === stages.length - 1} onClick={() => selectStage(Math.min(stages.length - 1, stageIndex + 1))}>Next →</button>
+          </div>
+
+          <section className={`study-mobile-sheet operation-mobile-sheet ${mobileOpen ? 'open' : ''}`}>
+            <button className="study-mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close operation details"><X size={18} /></button>
+            <span className="sheet-eyebrow">OPERATING STATE {stageIndex + 1} / {stages.length}</span>
+            <h3>{stage.title}</h3>
+            <p>{stage.objective}</p>
+            <span className="sheet-subhead">SOURCE SEQUENCE</span>
+            <ul>{stage.sourceSequence.map(item => <li key={item}>{item}</li>)}</ul>
+            <span className="sheet-subhead">OPERATOR FOCUS</span>
+            <ul>{stage.operatorFocus.map(item => <li key={item}>{item}</li>)}</ul>
+            <p className="sheet-note"><b>Training boundary:</b> {stage.caution}</p>
+          </section>
         </div>
 
         <aside className="burner-tech">

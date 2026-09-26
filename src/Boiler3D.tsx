@@ -1188,9 +1188,20 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       g.add(bodyLight);
       flameLights.push(bodyLight);
 
-      const burnerMajorLabel = addLabel(name, new THREE.Vector3(-4.82, 1.28, 1.20));
+      const burnerMajorLabel = addLabel(
+        name,
+        mobileRender
+          ? new THREE.Vector3(-3.86, 1.28, 1.20)
+          : new THREE.Vector3(-4.82, 1.28, 1.20),
+      );
       burnerMajorLabel.scale.set(mobileRender ? 1.72 : 1.95, mobileRender ? 0.33 : 0.37, 1);
-      addDetailLabel('FLAME SCANNER', name, new THREE.Vector3(-5.02, 0.78, 0.94));
+      addDetailLabel(
+        'FLAME SCANNER',
+        name,
+        mobileRender
+          ? new THREE.Vector3(-4.18, 0.78, 0.94)
+          : new THREE.Vector3(-5.02, 0.78, 0.94),
+      );
       addDetailLabel('AIR REGISTER', name, new THREE.Vector3(-4.25, 0.30, -1.02));
       addDetailLabel('PILOT BURNER', name, new THREE.Vector3(-3.46, -0.10, 1.05));
       addDetailLabel('IGNITION ELECTRODE', name, new THREE.Vector3(-4.36, -0.58, -1.05));

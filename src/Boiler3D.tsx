@@ -656,7 +656,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         const baseOpacity = (obj.userData.baseOpacity as number | undefined) ?? 1;
         let modeFactor = 1;
         if (kind === 'shell') {
-          if (mode === 'cutaway') modeFactor = 0.18;
+          if (mode === 'cutaway') modeFactor = 0.48;
           if (mode === 'xray') modeFactor = 0.08;
         } else if (kind === 'internal' && mode === 'xray') {
           modeFactor = 0.58;
@@ -669,6 +669,10 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           mat.opacity = opacity;
           mat.transparent = opacity < 0.98;
           mat.depthWrite = opacity > 0.25;
+          mat.clippingPlanes = kind === 'shell' && mode === 'cutaway'
+            ? [new THREE.Plane(new THREE.Vector3(0, 0, 1), 0.04)]
+            : null;
+          mat.clipShadows = true;
           mat.needsUpdate = true;
         });
       });

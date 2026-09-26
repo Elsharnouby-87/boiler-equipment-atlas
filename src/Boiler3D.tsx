@@ -2206,8 +2206,12 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     } else if (cameraCommand.action === 'fitComponent') {
       const componentName = cameraCommand.component ?? selectedRef.current;
       if (componentName === 'Burner & Ignition') {
+        const canvasAspect = state.renderer.domElement.clientWidth / Math.max(1, state.renderer.domElement.clientHeight);
+        const mobileLandscape = state.mobileRender && canvasAspect > 1.45;
         const burnerPreset: CameraPreset = state.mobileRender
-          ? { yaw: -0.28, pitch: 0.095, radius: 10.2, target: [-3.10, -0.72, 0.03] }
+          ? mobileLandscape
+            ? { yaw: -0.28, pitch: 0.075, radius: 7.25, target: [-3.05, -0.72, 0.03] }
+            : { yaw: -0.28, pitch: 0.095, radius: 11.15, target: [-3.05, -0.72, 0.03] }
           : { yaw: -0.28, pitch: 0.085, radius: 8.55, target: [-3.15, -0.72, 0.03] };
         state.transitionCamera(burnerPreset, 820);
       } else {

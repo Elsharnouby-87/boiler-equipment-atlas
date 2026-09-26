@@ -229,9 +229,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
   const stateRef = useRef<SceneState | null>(null);
   const modeRef = useRef(mode);
   const selectedRef = useRef(selected);
+  const labelsRef = useRef(labels);
+  const contextModeRef = useRef(contextMode);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { selectedRef.current = selected; }, [selected]);
+  useEffect(() => { labelsRef.current = labels; }, [labels]);
+  useEffect(() => { contextModeRef.current = contextMode; }, [contextMode]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -391,11 +395,33 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const mark = (mesh: THREE.Object3D, name: string) => {
       mesh.userData.component = name;
     };
+    const labelPriority: Record<string, number> = {
+      'Furnace Tube': 4,
+      'Burner & Ignition': 4,
+      'Front Smokebox': 4,
+      'Rear Smokebox': 4,
+      'Stack / Flue Outlet': 4,
+      'Economizer': 3,
+      'Boiler Shell': 3,
+      'Fire Tubes': 3,
+      'Tube Sheets': 3,
+      'Steam Outlet': 2,
+      'Safety Valve': 2,
+      'Feedwater Inlet': 2,
+      'Level Gauge': 2,
+      'Pressure Controls': 1,
+      'Level Sensors': 1,
+      'Steam Space': 1,
+      'Water Space': 1,
+      'Blowdown Valve': 1,
+    };
+
     const addLabel = (name: string, pos: THREE.Vector3) => {
       const s = makeLabel(name);
       s.position.copy(pos);
       s.userData.baseLabelScale = s.scale.clone();
       s.userData.component = name;
+      s.userData.labelPriority = labelPriority[name] ?? 1;
       labelGroup.add(s);
       return s;
     };
@@ -2005,16 +2031,61 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
       });
 
-      // Preserve the original label size for normal and close views.
-      // Only add a moderate boost once the camera is genuinely zoomed out.
-      const zoomOut = THREE.MathUtils.clamp((orbit.radius - 17) / 17, 0, 1);
+      // Label LOD / decluttering:
+      // near = show the normal full anatomy;
+      // medium = keep selected + important systems;
+      // far = keep selected + only the five major boiler landmarks.
+      // This avoids the old failure mode where every label grew into the same
+      // small screen area and became unreadable.
+      const selectedNow = selectedRef.current;
+      const contextNow = contextModeRef.current;
+      const labelsOn = labelsRef.current;
+      const farZoom = orbit.radius >= 22;
+      const mediumZoom = !farZoom && orbit.radius >= 17;
+
       labelGroup.children.forEach(label => {
         if (!(label instanceof THREE.Sprite)) return;
+
+        const componentName = label.userData.component as string | undefined;
+        const detailLabel = Boolean(label.userData.detailLabel);
+        const priority = (label.userData.labelPriority as number | undefined) ?? 1;
+        const burnerTopicOnly = selectedNow === 'Burner & Ignition' && contextNow !== 'full';
+
+        let visible = false;
+        if (labelsOn) {
+          if (burnerTopicOnly) {
+            visible = componentName === 'Burner & Ignition';
+          } else if (detailLabel) {
+            visible = componentName === selectedNow && contextNow !== 'full';
+          } else {
+            visible = contextNow === 'full' || componentName === selectedNow || contextNow === 'focus';
+          }
+        }
+
+        if (visible && contextNow === 'full' && componentName !== selectedNow) {
+          if (farZoom) visible = priority >= 4;
+          else if (mediumZoom) visible = priority >= 3;
+        }
+
+        label.visible = visible;
+
         const base = label.userData.baseLabelScale as THREE.Vector3 | undefined;
-        if (!base) return;
-        const detail = Boolean(label.userData.detailLabel);
-        const boost = 1 + zoomOut * (detail ? 0.38 : 0.50);
-        label.scale.set(base.x * boost, base.y * boost, base.z);
+        if (base) {
+          const scaleBoost = farZoom ? 1.14 : mediumZoom ? 1.07 : 1;
+          label.scale.set(base.x * scaleBoost, base.y * scaleBoost, base.z);
+        }
+
+        label.material.opacity = !visible
+          ? 0
+          : componentName === selectedNow
+            ? 1
+            : farZoom
+              ? 0.95
+              : mediumZoom
+                ? 0.90
+                : contextNow === 'full'
+                  ? 0.82
+                  : 0.34;
       });
 
       flameLayers.forEach((mesh, index) => {

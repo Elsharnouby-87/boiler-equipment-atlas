@@ -2009,14 +2009,17 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         }
         label.getWorldPosition(labelWorldPosition);
         const distance = camera.position.distanceTo(labelWorldPosition);
+        const detailLabel = Boolean(label.userData.detailLabel);
         const distanceFactor = Math.pow(
           Math.max(0.25, distance / labelReferenceDistance),
-          0.86,
+          detailLabel ? 0.52 : 0.60,
         );
         const scaleFactor = THREE.MathUtils.clamp(
           distanceFactor,
-          mobileRender ? 0.78 : 0.72,
-          mobileRender ? 1.95 : 2.30,
+          mobileRender ? 0.80 : 0.76,
+          detailLabel
+            ? (mobileRender ? 1.34 : 1.42)
+            : (mobileRender ? 1.42 : 1.56),
         );
         label.scale.set(
           baseScale.x * scaleFactor,

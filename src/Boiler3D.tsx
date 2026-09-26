@@ -158,8 +158,15 @@ function makeLabel(text: string) {
   ctx.fillText(text, 256, 48);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
-  sprite.scale.set(2.5, 0.47, 1);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    sizeAttenuation: false,
+  }));
+  // Screen-space label sizing: stays readable at any zoom distance without
+  // ballooning over the model when the camera pulls back.
+  sprite.scale.set(0.115, 0.022, 1);
   sprite.renderOrder = 20;
   sprite.userData.labelTexture = texture;
   return sprite;
@@ -185,8 +192,13 @@ function makeDetailLabel(text: string) {
   ctx.fillText(text, 210, 39);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
-  sprite.scale.set(1.75, 0.32, 1);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    sizeAttenuation: false,
+  }));
+  sprite.scale.set(0.095, 0.018, 1);
   sprite.renderOrder = 24;
   sprite.userData.labelTexture = texture;
   sprite.userData.detailLabel = true;
@@ -386,6 +398,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const addLabel = (name: string, pos: THREE.Vector3) => {
       const s = makeLabel(name);
       s.position.copy(pos);
+      if (mobileRender) s.scale.set(0.068, 0.021, 1);
       s.userData.component = name;
       labelGroup.add(s);
       return s;
@@ -393,7 +406,11 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const addDetailLabel = (text: string, componentName: string, pos: THREE.Vector3) => {
       const s = makeDetailLabel(text);
       s.position.copy(pos);
-      s.scale.set(mobileRender ? 1.08 : 1.30, mobileRender ? 0.205 : 0.245, 1);
+      s.scale.set(
+        mobileRender ? 0.060 : 0.095,
+        mobileRender ? 0.0175 : 0.018,
+        1,
+      );
       s.userData.component = componentName;
       labelGroup.add(s);
     };
@@ -1214,7 +1231,11 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           ? new THREE.Vector3(-3.86, 1.28, 1.20)
           : new THREE.Vector3(-4.82, 1.28, 1.20),
       );
-      burnerMajorLabel.scale.set(mobileRender ? 1.72 : 1.95, mobileRender ? 0.33 : 0.37, 1);
+      burnerMajorLabel.scale.set(
+        mobileRender ? 0.078 : 0.128,
+        mobileRender ? 0.023 : 0.024,
+        1,
+      );
       addDetailLabel(
         'FLAME SCANNER',
         name,
@@ -1969,8 +1990,6 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     let raf = 0;
     const clock = new THREE.Clock();
-    const labelWorldPosition = new THREE.Vector3();
-    const labelReferenceDistance = mobileRender ? 18.5 : 17.0;
     let lastFrame = performance.now();
     const animate = () => {
       const now = performance.now();
@@ -1994,38 +2013,6 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       components.forEach(group => {
         const target = group.userData.targetPosition as THREE.Vector3 | undefined;
         if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
-      });
-
-      // Keep labels readable while zooming out.  Sprites are world-space by
-      // default, so without compensation they shrink until the text becomes
-      // unreadable.  Scale them with camera distance while keeping a clamp so
-      // close-up views do not become dominated by labels.
-      labelGroup.children.forEach(label => {
-        if (!(label instanceof THREE.Sprite)) return;
-        let baseScale = label.userData.screenScaleBase as THREE.Vector3 | undefined;
-        if (!baseScale) {
-          baseScale = label.scale.clone();
-          label.userData.screenScaleBase = baseScale;
-        }
-        label.getWorldPosition(labelWorldPosition);
-        const distance = camera.position.distanceTo(labelWorldPosition);
-        const detailLabel = Boolean(label.userData.detailLabel);
-        const distanceFactor = Math.pow(
-          Math.max(0.25, distance / labelReferenceDistance),
-          detailLabel ? 0.52 : 0.60,
-        );
-        const scaleFactor = THREE.MathUtils.clamp(
-          distanceFactor,
-          mobileRender ? 0.80 : 0.76,
-          detailLabel
-            ? (mobileRender ? 1.34 : 1.42)
-            : (mobileRender ? 1.42 : 1.56),
-        );
-        label.scale.set(
-          baseScale.x * scaleFactor,
-          baseScale.y * scaleFactor,
-          baseScale.z,
-        );
       });
 
       flameLayers.forEach((mesh, index) => {

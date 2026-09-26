@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { CameraCommand, ContextMode, ViewMode } from './modelTypes';
-import { addBoltRingX, addFlangeX, cylinderBetween, makeBoilerSurfaceTexture } from './boiler3d/sceneHelpers';
+import { addBoltRingX, addFlangeX, cylinderBetween, makeBoilerSurfaceTexture, makeFlameEnvelopeGeometry, makeFlameMaterial } from './boiler3d/sceneHelpers';
 
 type Props = {
   mode: ViewMode;
@@ -346,8 +346,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const components = new Map<string, THREE.Group>();
     const labelGroup = new THREE.Group();
     const flowGroup = new THREE.Group();
-    let flameOuter: THREE.Mesh | null = null;
-    let flameCoreMesh: THREE.Mesh | null = null;
+    const flameLayers: THREE.Mesh[] = [];
+    const pilotFlameLayers: THREE.Mesh[] = [];
+    const flameLights: THREE.PointLight[] = [];
     root.add(labelGroup, flowGroup);
 
     const component = (name: string) => {
@@ -371,6 +372,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const addDetailLabel = (text: string, componentName: string, pos: THREE.Vector3) => {
       const s = makeDetailLabel(text);
       s.position.copy(pos);
+      if (mobileRender) s.scale.set(1.48, 0.27, 1);
       s.userData.component = componentName;
       labelGroup.add(s);
     };
@@ -726,6 +728,16 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(registerHub, name);
       g.add(registerHub);
 
+      const registerInnerRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.31, 0.026, 8, mobileRender ? 22 : 34),
+        darkMat,
+      );
+      registerInnerRing.rotation.y = Math.PI / 2;
+      registerInnerRing.position.set(-4.205, -0.82, 0);
+      tagMaterial(registerInnerRing, 1, 'utility');
+      mark(registerInnerRing, name);
+      g.add(registerInnerRing);
+
       const vaneCount = mobileRender ? 8 : 12;
       for (let i = 0; i < vaneCount; i += 1) {
         const angle = (i / vaneCount) * Math.PI * 2;
@@ -917,26 +929,42 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(pilotSolenoid, name);
       g.add(pilotSolenoid);
 
-      // Small pilot flame exists separately from the main flame.
-      const pilotFlame = new THREE.Mesh(
-        new THREE.ConeGeometry(0.085, 0.72, mobileRender ? 12 : 18, 1, true),
-        new THREE.MeshPhysicalMaterial({
-          color: '#63b9ff',
-          emissive: '#3f8cff',
-          emissiveIntensity: mobileRender ? 1.0 : 1.5,
-          transparent: true,
-          opacity: 0.70,
-          metalness: 0,
-          roughness: 0.16,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        }),
+      // Small pilot flame: independent layered blue-root / pale-tip flame.
+      const pilotOuterMat = makeFlameMaterial('#3f8cff', '#ffd894', 0.70, 12.4);
+      const pilotOuter = new THREE.Mesh(
+        makeFlameEnvelopeGeometry(
+          0.66,
+          [[0, 0.035], [0.16, 0.095], [0.42, 0.12], [0.72, 0.075], [1, 0.012]],
+          mobileRender ? 12 : 18,
+        ),
+        pilotOuterMat,
       );
-      pilotFlame.rotation.z = -Math.PI / 2;
-      pilotFlame.position.set(-3.30, -0.61, 0.21);
-      tagMaterial(pilotFlame, 0.70, 'internal');
-      mark(pilotFlame, name);
-      g.add(pilotFlame);
+      pilotOuter.rotation.z = -Math.PI / 2;
+      pilotOuter.position.set(-3.60, -0.61, 0.21);
+      pilotOuter.userData.baseScale = new THREE.Vector3(1, 1, 1);
+      pilotOuter.userData.phase = 1.7;
+      tagMaterial(pilotOuter, 0.70, 'internal');
+      mark(pilotOuter, name);
+      g.add(pilotOuter);
+      pilotFlameLayers.push(pilotOuter);
+
+      const pilotCoreMat = makeFlameMaterial('#b8e6ff', '#fff0b7', 0.72, 14.1);
+      const pilotCore = new THREE.Mesh(
+        makeFlameEnvelopeGeometry(
+          0.42,
+          [[0, 0.022], [0.2, 0.055], [0.48, 0.07], [0.78, 0.04], [1, 0.008]],
+          mobileRender ? 10 : 14,
+        ),
+        pilotCoreMat,
+      );
+      pilotCore.rotation.z = -Math.PI / 2;
+      pilotCore.position.set(-3.59, -0.61, 0.21);
+      pilotCore.userData.baseScale = new THREE.Vector3(1, 1, 1);
+      pilotCore.userData.phase = 3.2;
+      tagMaterial(pilotCore, 0.72, 'internal');
+      mark(pilotCore, name);
+      g.add(pilotCore);
+      pilotFlameLayers.push(pilotCore);
 
       // -------------------------------------------------------------------
       // Ignition transformer, ceramic electrode and high-voltage cable.
@@ -1070,57 +1098,101 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       g.add(scannerLens);
 
       // -------------------------------------------------------------------
-      // Existing main flame meshes are retained for this package phase.
-      // A separate flame-fidelity pass will replace their visual model.
+      // Layered industrial flame.  The geometry uses irregular radial
+      // envelopes plus lightweight shader turbulence rather than a solid cone.
       // -------------------------------------------------------------------
-      const flameMat = new THREE.MeshPhysicalMaterial({
-        color: '#ff7a18',
-        transparent: true,
-        opacity: 0.72,
-        emissive: '#ff3d09',
-        emissiveIntensity: mobileRender ? 1.1 : 1.7,
-        metalness: 0,
-        roughness: 0.25,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-      const flameCoreMat = new THREE.MeshBasicMaterial({
-        color: '#ffd36b',
-        transparent: true,
-        opacity: 0.65,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
+      const flameRootX = -3.43;
+      const addFlameLayer = (
+        length: number,
+        profile: Array<[number, number]>,
+        low: string,
+        high: string,
+        opacity: number,
+        seed: number,
+        yOffset = 0,
+        zOffset = 0,
+        radialSegments = mobileRender ? 16 : 26,
+      ) => {
+        const mesh = new THREE.Mesh(
+          makeFlameEnvelopeGeometry(length, profile, radialSegments),
+          makeFlameMaterial(low, high, opacity, seed),
+        );
+        mesh.rotation.z = -Math.PI / 2;
+        mesh.position.set(flameRootX, -0.82 + yOffset, zOffset);
+        mesh.userData.baseScale = new THREE.Vector3(1, 1, 1);
+        mesh.userData.phase = seed * 0.37;
+        tagMaterial(mesh, opacity, 'internal');
+        mark(mesh, name);
+        g.add(mesh);
+        flameLayers.push(mesh);
+        return mesh;
+      };
 
-      const flame = new THREE.Mesh(
-        new THREE.ConeGeometry(0.48, 3.15, mobileRender ? 18 : 30, 1, true),
-        flameMat,
+      addFlameLayer(
+        5.05,
+        [[0, 0.11], [0.08, 0.40], [0.20, 0.61], [0.38, 0.70], [0.56, 0.58], [0.73, 0.43], [0.90, 0.22], [1, 0.018]],
+        '#ff4a12',
+        '#8e1408',
+        mobileRender ? 0.34 : 0.42,
+        2.2,
+        0.02,
+        0.00,
+        mobileRender ? 14 : 24,
       );
-      flame.rotation.z = -Math.PI / 2;
-      flame.position.set(-2.42, -0.82, 0);
-      tagMaterial(flame, 0.72, 'internal');
-      mark(flame, name);
-      g.add(flame);
-      flameOuter = flame;
 
-      const flameCore = new THREE.Mesh(
-        new THREE.ConeGeometry(0.22, 1.75, mobileRender ? 14 : 22, 1, true),
-        flameCoreMat,
+      addFlameLayer(
+        4.48,
+        [[0, 0.10], [0.08, 0.31], [0.21, 0.52], [0.40, 0.58], [0.58, 0.48], [0.76, 0.32], [0.92, 0.15], [1, 0.014]],
+        '#ffc84a',
+        '#ff5a14',
+        mobileRender ? 0.68 : 0.78,
+        4.8,
+        -0.015,
+        -0.015,
       );
-      flameCore.rotation.z = -Math.PI / 2;
-      flameCore.position.set(-3.05, -0.82, 0);
-      flameCore.userData.component = name;
-      flameCore.userData.kind = 'internal';
-      flameCore.userData.baseOpacity = 0.65;
-      g.add(flameCore);
-      flameCoreMesh = flameCore;
 
-      addLabel(name, new THREE.Vector3(-5.15, 0.72, 1.30));
-      addDetailLabel('AIR REGISTER', name, new THREE.Vector3(-4.35, 0.36, -0.82));
-      addDetailLabel('MAIN FUEL NOZZLE', name, new THREE.Vector3(-3.76, -1.36, -0.48));
-      addDetailLabel('PILOT BURNER', name, new THREE.Vector3(-3.82, -0.10, 0.88));
-      addDetailLabel('IGNITION ELECTRODE', name, new THREE.Vector3(-4.08, -0.05, -0.82));
-      addDetailLabel('FLAME SCANNER', name, new THREE.Vector3(-4.85, 0.54, 0.78));
+      addFlameLayer(
+        2.78,
+        [[0, 0.065], [0.10, 0.19], [0.30, 0.31], [0.52, 0.29], [0.74, 0.19], [0.92, 0.08], [1, 0.010]],
+        '#fff7c5',
+        '#ffb43b',
+        mobileRender ? 0.74 : 0.86,
+        7.1,
+        0.005,
+        0.018,
+        mobileRender ? 14 : 22,
+      );
+
+      addFlameLayer(
+        1.08,
+        [[0, 0.035], [0.10, 0.11], [0.30, 0.21], [0.55, 0.18], [0.80, 0.09], [1, 0.008]],
+        '#fffde8',
+        '#ffd45c',
+        mobileRender ? 0.82 : 0.94,
+        9.6,
+        0,
+        0,
+        mobileRender ? 12 : 18,
+      );
+
+      const rootLight = new THREE.PointLight('#ffd26a', mobileRender ? 1.15 : 1.75, 4.2, 2);
+      rootLight.position.set(-3.15, -0.82, 0);
+      rootLight.userData.baseIntensity = rootLight.intensity;
+      g.add(rootLight);
+      flameLights.push(rootLight);
+
+      const bodyLight = new THREE.PointLight('#ff6b22', mobileRender ? 0.55 : 0.85, 5.8, 2);
+      bodyLight.position.set(-1.95, -0.82, 0);
+      bodyLight.userData.baseIntensity = bodyLight.intensity;
+      g.add(bodyLight);
+      flameLights.push(bodyLight);
+
+      addLabel(name, new THREE.Vector3(-5.12, 0.86, 1.34));
+      addDetailLabel('AIR REGISTER', name, new THREE.Vector3(-4.28, 0.30, -1.10));
+      addDetailLabel('MAIN FUEL NOZZLE', name, new THREE.Vector3(-3.54, -1.48, -0.64));
+      addDetailLabel('PILOT BURNER', name, new THREE.Vector3(-3.54, -0.03, 1.06));
+      addDetailLabel('IGNITION ELECTRODE', name, new THREE.Vector3(-4.42, -0.18, -1.34));
+      addDetailLabel('FLAME SCANNER', name, new THREE.Vector3(-5.08, 0.63, 1.00));
     }
 
     // REAR SMOKEBOX
@@ -1630,11 +1702,14 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addLabel(name, new THREE.Vector3(-0.15, 3.55, 1.15));
     }
 
-    // Flow particles: hot gas + water/steam indication
+    // Flow particles: generic boiler flow plus a dedicated burner learning overlay.
     const hotMat = material('#ff8c38', 0.0, 0.2, 0.85, '#ff4e13');
     const blueMat = material('#53c8f5', 0.0, 0.2, 0.72, '#1aa6e1');
+    const burnerAirMat = material('#66d8ff', 0.0, 0.16, 0.88, '#2bc8ff');
+    const burnerFuelMat = material('#ffb45e', 0.0, 0.18, 0.90, '#ff7a22');
     const hotGeometry = new THREE.SphereGeometry(0.055, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
     const waterGeometry = new THREE.SphereGeometry(0.05, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
+    const burnerFlowGeometry = new THREE.SphereGeometry(0.045, mobileRender ? 5 : 7, mobileRender ? 5 : 7);
     const hotCount = mobileRender ? 14 : 24;
     const waterCount = mobileRender ? 10 : 16;
     for (let i = 0; i < hotCount; i += 1) {
@@ -1647,6 +1722,23 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const p = new THREE.Mesh(waterGeometry, blueMat);
       p.userData.phase = i / waterCount;
       p.userData.flowType = 'water';
+      flowGroup.add(p);
+    }
+    const burnerAirCount = mobileRender ? 6 : 10;
+    for (let i = 0; i < burnerAirCount; i += 1) {
+      const p = new THREE.Mesh(burnerFlowGeometry, burnerAirMat);
+      p.userData.phase = i / burnerAirCount;
+      p.userData.flowType = 'burnerAir';
+      p.visible = false;
+      flowGroup.add(p);
+    }
+    const burnerFuelCount = mobileRender ? 4 : 7;
+    for (let i = 0; i < burnerFuelCount; i += 1) {
+      const p = new THREE.Mesh(burnerFlowGeometry, burnerFuelMat);
+      p.userData.phase = i / burnerFuelCount;
+      p.userData.flowType = 'burnerFuel';
+      p.userData.fuelPath = i % 3 === 0 ? 'pilot' : 'main';
+      p.visible = false;
       flowGroup.add(p);
     }
     flowGroup.visible = false;
@@ -1855,25 +1947,64 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
       });
 
-      if (flameOuter) {
-        const pulse = 1 + Math.sin(t * 9.2) * (mobileRender ? 0.018 : 0.028);
-        flameOuter.scale.set(1, pulse, pulse);
-      }
-      if (flameCoreMesh) {
-        const corePulse = 1 + Math.sin(t * 11.4 + 0.8) * (mobileRender ? 0.015 : 0.024);
-        flameCoreMesh.scale.set(1, corePulse, corePulse);
-      }
+      flameLayers.forEach((mesh, index) => {
+        const mat = mesh.material as THREE.ShaderMaterial;
+        if (mat.uniforms.uTime) mat.uniforms.uTime.value = t;
+        const phase = (mesh.userData.phase as number) ?? index;
+        const widthPulse = 1 + Math.sin(t * (5.7 + index * 0.65) + phase) * (mobileRender ? 0.018 : 0.030);
+        const lengthPulse = 1 + Math.sin(t * (4.2 + index * 0.52) + phase * 1.3) * (mobileRender ? 0.014 : 0.024);
+        mesh.scale.set(widthPulse, lengthPulse, 1 / Math.max(0.96, widthPulse * 0.98));
+      });
+      pilotFlameLayers.forEach((mesh, index) => {
+        const mat = mesh.material as THREE.ShaderMaterial;
+        if (mat.uniforms.uTime) mat.uniforms.uTime.value = t * 1.12;
+        const phase = (mesh.userData.phase as number) ?? index;
+        const widthPulse = 1 + Math.sin(t * (8.4 + index) + phase) * (mobileRender ? 0.020 : 0.034);
+        const lengthPulse = 1 + Math.sin(t * (7.1 + index * 0.7) + phase * 1.4) * (mobileRender ? 0.018 : 0.030);
+        mesh.scale.set(widthPulse, lengthPulse, 1);
+      });
+      flameLights.forEach((light, index) => {
+        const base = (light.userData.baseIntensity as number) ?? light.intensity;
+        light.intensity = base * (1 + Math.sin(t * (7.0 + index * 1.4) + index) * 0.07);
+      });
 
       if (flowGroup.visible && (!mobileRender || now - lastFrame > 24)) {
         flowGroup.children.forEach((child) => {
-        const phase = (child.userData.phase as number) ?? 0;
-        if (child.userData.flowType === 'gas') {
-          const u = (phase + t * 0.12) % 1;
-          child.position.set(-3.25 + u * 6.5, -0.82 + Math.sin((u + phase) * Math.PI * 2) * 0.08, Math.sin((u * 4 + phase) * Math.PI) * 0.28);
-        } else {
-          const u = (phase + t * 0.07) % 1;
-          child.position.set(-2.8 + Math.sin((phase + t * 0.03) * 5) * 2.3, -1.7 + u * 3.3, 1.55 + Math.cos(phase * 10) * 0.28);
-        }
+          if (!child.visible) return;
+          const phase = (child.userData.phase as number) ?? 0;
+          const flowType = child.userData.flowType as string | undefined;
+          if (flowType === 'gas') {
+            const u = (phase + t * 0.12) % 1;
+            child.position.set(-3.25 + u * 6.5, -0.82 + Math.sin((u + phase) * Math.PI * 2) * 0.08, Math.sin((u * 4 + phase) * Math.PI) * 0.28);
+          } else if (flowType === 'water') {
+            const u = (phase + t * 0.07) % 1;
+            child.position.set(-2.8 + Math.sin((phase + t * 0.03) * 5) * 2.3, -1.7 + u * 3.3, 1.55 + Math.cos(phase * 10) * 0.28);
+          } else if (flowType === 'burnerAir') {
+            const u = (phase + t * 0.18) % 1;
+            if (u < 0.45) {
+              const q = u / 0.45;
+              child.position.set(
+                THREE.MathUtils.lerp(-6.42, -5.48, q),
+                THREE.MathUtils.lerp(-0.10, -0.73, q),
+                THREE.MathUtils.lerp(0.52, 0.17, q),
+              );
+            } else {
+              const q = (u - 0.45) / 0.55;
+              child.position.set(
+                THREE.MathUtils.lerp(-5.48, -4.12, q),
+                -0.82 + Math.sin((q + phase) * Math.PI * 2) * 0.07,
+                THREE.MathUtils.lerp(0.17, 0.02, q),
+              );
+            }
+          } else if (flowType === 'burnerFuel') {
+            const u = (phase + t * 0.15) % 1;
+            const pilot = child.userData.fuelPath === 'pilot';
+            child.position.set(
+              THREE.MathUtils.lerp(pilot ? -6.12 : -6.28, pilot ? -3.62 : -3.48, u),
+              THREE.MathUtils.lerp(pilot ? -0.50 : -1.06, pilot ? -0.61 : -0.82, u) + Math.sin((u + phase) * Math.PI) * 0.035,
+              THREE.MathUtils.lerp(pilot ? 0.72 : 0.58, pilot ? 0.21 : 0.0, u),
+            );
+          }
         });
         lastFrame = now;
       }
@@ -1921,6 +2052,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     state.labelGroup.visible = labels;
     state.flowGroup.visible = flow;
+    const burnerFlowMode = flow && selected === 'Burner & Ignition';
+    state.flowGroup.children.forEach(child => {
+      const flowType = child.userData.flowType as string | undefined;
+      child.visible = burnerFlowMode
+        ? flowType === 'burnerAir' || flowType === 'burnerFuel'
+        : flowType === 'gas' || flowType === 'water';
+    });
 
     state.components.forEach((group, name) => {
       const base = (group.userData.basePosition as THREE.Vector3 | undefined) ?? new THREE.Vector3();
@@ -1934,10 +2072,16 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           ? 0.22
           : 0.035;
 
-      // Preserve the physical relationship around the burner throat while focusing.
-      if (contextMode === 'focus' && selected === 'Burner & Ignition') {
-        if (name === 'Front Smokebox') contextFactor = 0.58;
-        if (name === 'Furnace Tube') contextFactor = 0.44;
+      // Burner hero view: keep only the throat/furnace as readable supporting context.
+      if (selected === 'Burner & Ignition' && contextMode === 'focus') {
+        if (name === 'Front Smokebox') contextFactor = 0.34;
+        else if (name === 'Furnace Tube') contextFactor = 0.30;
+        else if (name !== 'Burner & Ignition') contextFactor = 0.085;
+      }
+      if (selected === 'Burner & Ignition' && contextMode === 'isolate') {
+        if (name === 'Front Smokebox') contextFactor = 0.14;
+        else if (name === 'Furnace Tube') contextFactor = 0.18;
+        else if (name !== 'Burner & Ignition') contextFactor = 0.020;
       }
       if (contextMode === 'focus' && selected === 'Front Smokebox') {
         if (name === 'Burner & Ignition') contextFactor = 0.48;
@@ -1960,6 +2104,14 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         const opacity = Math.max(0.015, baseOpacity * modeFactor * contextFactor);
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         mats.forEach(mat => {
+          if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uContextOpacity) {
+            mat.uniforms.uContextOpacity.value = THREE.MathUtils.clamp(opacity / Math.max(baseOpacity, 0.001), 0.02, 1);
+            mat.transparent = true;
+            mat.depthWrite = false;
+            mat.clippingPlanes = null;
+            mat.needsUpdate = true;
+            return;
+          }
           mat.opacity = opacity;
           mat.transparent = opacity < 0.98;
           mat.depthWrite = opacity > 0.25;
@@ -1975,17 +2127,24 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     state.labelGroup.children.forEach(label => {
       const componentName = label.userData.component as string | undefined;
       const detailLabel = Boolean(label.userData.detailLabel);
-      label.visible = detailLabel
-        ? labels && componentName === selected && contextMode !== 'full'
-        : labels && (contextMode === 'full' || componentName === selected || contextMode === 'focus');
+      const burnerTopicOnly = selected === 'Burner & Ignition' && contextMode !== 'full';
+      if (burnerTopicOnly) {
+        label.visible = labels && componentName === 'Burner & Ignition';
+      } else {
+        label.visible = detailLabel
+          ? labels && componentName === selected && contextMode !== 'full'
+          : labels && (contextMode === 'full' || componentName === selected || contextMode === 'focus');
+      }
       if (label instanceof THREE.Sprite) {
-        label.material.opacity = detailLabel
-          ? (componentName === selected ? 0.96 : 0)
-          : componentName === selected
-            ? 1
-            : contextMode === 'full'
-              ? 0.82
-              : 0.34;
+        label.material.opacity = !label.visible
+          ? 0
+          : detailLabel
+            ? 0.96
+            : componentName === selected
+              ? 1
+              : contextMode === 'full'
+                ? 0.82
+                : 0.34;
       }
     });
 
@@ -1997,7 +2156,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     if (selectedGroup) {
       const bounds = new THREE.Box3().setFromObject(selectedGroup);
       state.highlight.box.copy(bounds);
-      state.highlight.visible = !state.mobileRender && !bounds.isEmpty();
+      // Keep the helper available for debugging, but do not show bounding boxes in learning views.
+      state.highlight.visible = false;
       state.selectionGlow.position.copy(bounds.getCenter(new THREE.Vector3()));
       state.selectionGlow.visible = contextMode !== 'full' || selected !== 'Boiler Shell';
     } else {
@@ -2029,11 +2189,18 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       if (preset) state.transitionCamera({ ...preset, yaw: -0.76, pitch: 0.18 }, 760);
     } else if (cameraCommand.action === 'fitComponent') {
       const componentName = cameraCommand.component ?? selectedRef.current;
-      const object = state.components.get(componentName);
-      const preset = object ? presetFor(object, state.mobileRender ? 2.55 : 2.25) : null;
-      if (preset) {
-        const hint = cameraHints[componentName];
-        state.transitionCamera({ ...preset, ...hint }, 650);
+      if (componentName === 'Burner & Ignition') {
+        const burnerPreset: CameraPreset = state.mobileRender
+          ? { yaw: -1.03, pitch: 0.105, radius: 6.15, target: [-4.23, -0.68, 0.04] }
+          : { yaw: -1.08, pitch: 0.115, radius: 5.25, target: [-4.18, -0.69, 0.03] };
+        state.transitionCamera(burnerPreset, 820);
+      } else {
+        const object = state.components.get(componentName);
+        const preset = object ? presetFor(object, state.mobileRender ? 2.55 : 2.25) : null;
+        if (preset) {
+          const hint = cameraHints[componentName];
+          state.transitionCamera({ ...preset, ...hint }, 650);
+        }
       }
     } else if (cameraCommand.action === 'zoomIn') {
       state.transitionCamera({

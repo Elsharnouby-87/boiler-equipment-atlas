@@ -32,7 +32,8 @@ const systems: Record<SystemId, {
       { name: 'Furnace Tube', mode: 'cutaway', purpose: 'Receive the burner flame and transfer heat through the furnace wall into surrounding boiler water.', watch: ['Flame position', 'Soot', 'Abnormal hot areas'], failure: ['Fouling', 'Thermal stress', 'Poor combustion'] },
       { name: 'Fire Tubes', mode: 'cutaway', purpose: 'Carry hot gas through the boiler water inventory for heat recovery.', watch: ['Cleanliness', 'Tube leakage', 'Gas-path restriction'], failure: ['Soot fouling', 'Tube leakage', 'Blockage'] },
       { name: 'Front Smokebox', mode: 'normal', purpose: 'Contain the front gas-side transition and provide access to tube ends.', watch: ['Sealing', 'Soot', 'External hot spots'], failure: ['Door/seal leakage', 'Deposit build-up'] },
-      { name: 'Rear Smokebox', mode: 'normal', purpose: 'Collect/turn combustion gas before final flue discharge.', watch: ['Cleanliness', 'Leakage', 'Restriction'], failure: ['Fouling', 'Seal leakage'] },
+      { name: 'Rear Smokebox', mode: 'normal', purpose: 'Collect/turn combustion gas before downstream heat recovery and final discharge.', watch: ['Cleanliness', 'Leakage', 'Restriction'], failure: ['Fouling', 'Seal leakage'] },
+      { name: 'Economizer', mode: 'cutaway', purpose: 'Recover remaining flue-gas heat into feedwater before it enters the boiler.', watch: ['Feedwater temperature', 'Flue-gas temperature', 'Fouling/leakage'], failure: ['Fouling', 'Corrosion', 'Water-side leakage', 'Restriction'] },
       { name: 'Stack / Flue Outlet', mode: 'normal', purpose: 'Discharge combustion products after heat recovery.', watch: ['Stack temperature', 'Smoke condition', 'Draft behavior'], failure: ['High stack temperature', 'Restriction', 'Corrosion'] },
     ],
   },
@@ -50,6 +51,7 @@ const systems: Record<SystemId, {
     title: 'Water, Steam & Feedwater',
     short: 'Inventory control from feedwater entry to steam delivery and blowdown.',
     components: [
+      { name: 'Economizer', mode: 'cutaway', purpose: 'Preheat feedwater using remaining exhaust-gas heat before boiler entry.', watch: ['Feedwater temperature gain', 'Gas-side cleanliness', 'Leakage'], failure: ['Fouling', 'Corrosion', 'Tube leakage'] },
       { name: 'Feedwater Inlet', mode: 'normal', purpose: 'Supply replacement water to maintain boiler level as steam is generated.', watch: ['Pump response', 'Valve alignment', 'Check valve/strainer'], failure: ['Pump failure', 'Blocked strainer', 'Check-valve leakage'] },
       { name: 'Water Space', mode: 'xray', purpose: 'Provide working water inventory for steam generation.', watch: ['Level', 'Bubbling/foaming', 'TDS/conductivity'], failure: ['Low/high level', 'Carryover risk', 'Deposit build-up'] },
       { name: 'Steam Space', mode: 'xray', purpose: 'Collect generated steam above the operating water level.', watch: ['Pressure', 'Level stability', 'Load response'], failure: ['Pressure instability', 'Water carryover'] },

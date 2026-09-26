@@ -162,11 +162,8 @@ function makeLabel(text: string) {
     map: texture,
     transparent: true,
     depthTest: false,
-    sizeAttenuation: false,
   }));
-  // Screen-space label sizing: stays readable at any zoom distance without
-  // ballooning over the model when the camera pulls back.
-  sprite.scale.set(0.115, 0.022, 1);
+  sprite.scale.set(2.5, 0.47, 1);
   sprite.renderOrder = 20;
   sprite.userData.labelTexture = texture;
   return sprite;
@@ -196,9 +193,8 @@ function makeDetailLabel(text: string) {
     map: texture,
     transparent: true,
     depthTest: false,
-    sizeAttenuation: false,
   }));
-  sprite.scale.set(0.095, 0.018, 1);
+  sprite.scale.set(1.75, 0.32, 1);
   sprite.renderOrder = 24;
   sprite.userData.labelTexture = texture;
   sprite.userData.detailLabel = true;
@@ -398,7 +394,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const addLabel = (name: string, pos: THREE.Vector3) => {
       const s = makeLabel(name);
       s.position.copy(pos);
-      if (mobileRender) s.scale.set(0.068, 0.021, 1);
+      s.userData.baseLabelScale = s.scale.clone();
       s.userData.component = name;
       labelGroup.add(s);
       return s;
@@ -406,11 +402,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const addDetailLabel = (text: string, componentName: string, pos: THREE.Vector3) => {
       const s = makeDetailLabel(text);
       s.position.copy(pos);
-      s.scale.set(
-        mobileRender ? 0.060 : 0.095,
-        mobileRender ? 0.0175 : 0.018,
-        1,
-      );
+      s.scale.set(mobileRender ? 1.08 : 1.30, mobileRender ? 0.205 : 0.245, 1);
+      s.userData.baseLabelScale = s.scale.clone();
       s.userData.component = componentName;
       labelGroup.add(s);
     };
@@ -1231,11 +1224,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           ? new THREE.Vector3(-3.86, 1.28, 1.20)
           : new THREE.Vector3(-4.82, 1.28, 1.20),
       );
-      burnerMajorLabel.scale.set(
-        mobileRender ? 0.078 : 0.128,
-        mobileRender ? 0.023 : 0.024,
-        1,
-      );
+      burnerMajorLabel.scale.set(mobileRender ? 1.72 : 1.95, mobileRender ? 0.33 : 0.37, 1);
+      burnerMajorLabel.userData.baseLabelScale = burnerMajorLabel.scale.clone();
       addDetailLabel(
         'FLAME SCANNER',
         name,
@@ -2013,6 +2003,18 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       components.forEach(group => {
         const target = group.userData.targetPosition as THREE.Vector3 | undefined;
         if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
+      });
+
+      // Preserve the original label size for normal and close views.
+      // Only add a moderate boost once the camera is genuinely zoomed out.
+      const zoomOut = THREE.MathUtils.clamp((orbit.radius - 17) / 17, 0, 1);
+      labelGroup.children.forEach(label => {
+        if (!(label instanceof THREE.Sprite)) return;
+        const base = label.userData.baseLabelScale as THREE.Vector3 | undefined;
+        if (!base) return;
+        const detail = Boolean(label.userData.detailLabel);
+        const boost = 1 + zoomOut * (detail ? 0.38 : 0.50);
+        label.scale.set(base.x * boost, base.y * boost, base.z);
       });
 
       flameLayers.forEach((mesh, index) => {

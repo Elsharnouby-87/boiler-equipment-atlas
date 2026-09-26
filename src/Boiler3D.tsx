@@ -69,7 +69,7 @@ const explodeOffsets: Record<string, THREE.Vector3> = {
 };
 
 const cameraHints: Record<string, Partial<Pick<CameraPreset, 'yaw' | 'pitch'>>> = {
-  'Burner & Ignition': { yaw: -Math.PI / 2, pitch: 0.06 },
+  'Burner & Ignition': { yaw: -1.16, pitch: 0.10 },
   'Front Smokebox': { yaw: -Math.PI / 2, pitch: 0.10 },
   'Furnace Tube': { yaw: -0.82, pitch: 0.10 },
   'Fire Tubes': { yaw: -0.72, pitch: 0.14 },
@@ -160,6 +160,34 @@ function makeLabel(text: string) {
   sprite.scale.set(2.5, 0.47, 1);
   sprite.renderOrder = 20;
   sprite.userData.labelTexture = texture;
+  return sprite;
+}
+
+function makeDetailLabel(text: string) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 420;
+  canvas.height = 76;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(3,17,28,.93)';
+  ctx.strokeStyle = 'rgba(255,145,48,.72)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(4, 4, 412, 68, 12);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = '700 23px Inter, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff3e6';
+  ctx.fillText(text, 210, 39);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  sprite.scale.set(1.75, 0.32, 1);
+  sprite.renderOrder = 24;
+  sprite.userData.labelTexture = texture;
+  sprite.userData.detailLabel = true;
   return sprite;
 }
 
@@ -326,6 +354,12 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const s = makeLabel(name);
       s.position.copy(pos);
       s.userData.component = name;
+      labelGroup.add(s);
+    };
+    const addDetailLabel = (text: string, componentName: string, pos: THREE.Vector3) => {
+      const s = makeDetailLabel(text);
+      s.position.copy(pos);
+      s.userData.component = componentName;
       labelGroup.add(s);
     };
 
@@ -575,25 +609,405 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(latchBar, name);
       g.add(latchBar);
 
-      // Burner mounting flange and refractory throat.
+      // Burner mounting flange and refractory throat / quarl.
       addFlangeX(g, -4.34, -0.82, 0, 0.76, 0.45, 0.12, trimMat, name);
       addBoltRingX(g, -4.42, 0.62, mobileRender ? 8 : 12, trimMat, name, 0.040, -0.82, 0);
-      const throatLining = cylinderX(0.63, 0.24, material('#9a7658', 0.05, 0.92, 1, undefined, refractoryTex), 32);
-      throatLining.position.set(-4.09, -0.82, 0);
+      const throatMat = material('#9a7658', 0.05, 0.92, 1, undefined, refractoryTex);
+      const throatLining = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.54, 0.68, 0.78, mobileRender ? 24 : 36, 1, true),
+        throatMat,
+      );
+      throatLining.rotation.z = Math.PI / 2;
+      throatLining.position.set(-3.95, -0.82, 0);
       tagMaterial(throatLining, 1, 'utility');
       mark(throatLining, name);
       g.add(throatLining);
+
+      const throatCollar = cylinderX(0.72, 0.10, trimMat, 36);
+      throatCollar.position.set(-4.31, -0.82, 0);
+      tagMaterial(throatCollar, 1, 'utility');
+      mark(throatCollar, name);
+      g.add(throatCollar);
 
       addLabel(name, new THREE.Vector3(-4.0, 2.45, 0));
     }
     {
       const name = 'Burner & Ignition';
       const g = component(name);
-      const steelMat = material('#556872', 0.84, 0.32, 1, undefined, paintedSteelTex);
-      const darkMat = material('#2e3a40', 0.86, 0.36, 1, undefined, darkSteelTex);
-      const trimMat = material('#a5b0b5', 0.90, 0.24, 1, undefined, stainlessTex);
-      const copperMat = material('#8a532f', 0.78, 0.34);
-      const ceramicMat = material('#ddd9c8', 0.05, 0.62);
+
+      const paintedMat = material('#586d77', 0.84, 0.31, 1, undefined, paintedSteelTex);
+      const darkMat = material('#2d3940', 0.86, 0.37, 1, undefined, darkSteelTex);
+      const trimMat = material('#a7b2b7', 0.90, 0.23, 1, undefined, stainlessTex);
+      const brassMat = material('#a97b42', 0.70, 0.31);
+      const pilotPipeMat = material('#c6a45a', 0.73, 0.28);
+      const mainFuelMat = material('#8a532f', 0.78, 0.34);
+      const ceramicMat = material('#e3dfd0', 0.04, 0.64);
+      const cableMat = material('#22292d', 0.28, 0.62);
+
+      // -------------------------------------------------------------------
+      // Main burner body / windbox.  The main axis points directly into
+      // the refractory throat and furnace, making the relationship obvious.
+      // -------------------------------------------------------------------
+      const windbox = cylinderX(0.66, 1.18, paintedMat, mobileRender ? 30 : 46);
+      windbox.position.set(-4.92, -0.82, 0);
+      windbox.castShadow = !mobileRender;
+      tagMaterial(windbox, 1, 'utility');
+      mark(windbox, name);
+      g.add(windbox);
+
+      const windboxRear = cylinderX(0.72, 0.12, trimMat, mobileRender ? 28 : 42);
+      windboxRear.position.set(-5.55, -0.82, 0);
+      tagMaterial(windboxRear, 1, 'utility');
+      mark(windboxRear, name);
+      g.add(windboxRear);
+
+      const windboxFront = cylinderX(0.73, 0.12, trimMat, mobileRender ? 28 : 42);
+      windboxFront.position.set(-4.32, -0.82, 0);
+      tagMaterial(windboxFront, 1, 'utility');
+      mark(windboxFront, name);
+      g.add(windboxFront);
+
+      // Observation / inspection window on burner housing.
+      const sightHousing = cylinderBetween(
+        new THREE.Vector3(-4.72, -0.28, 0.48),
+        new THREE.Vector3(-4.57, -0.10, 0.68),
+        0.105,
+        darkMat,
+        14,
+      );
+      tagMaterial(sightHousing, 1, 'utility');
+      mark(sightHousing, name);
+      g.add(sightHousing);
+      const sightGlass = new THREE.Mesh(
+        new THREE.SphereGeometry(0.10, mobileRender ? 12 : 18, 8),
+        new THREE.MeshPhysicalMaterial({
+          color: '#79dfff',
+          roughness: 0.05,
+          metalness: 0,
+          transparent: true,
+          opacity: 0.68,
+          transmission: mobileRender ? 0 : 0.32,
+        }),
+      );
+      sightGlass.position.set(-4.53, -0.06, 0.72);
+      sightGlass.userData.component = name;
+      sightGlass.userData.kind = 'utility';
+      sightGlass.userData.baseOpacity = 0.68;
+      g.add(sightGlass);
+
+      // -------------------------------------------------------------------
+      // Air register: ring + visible swirl vanes immediately before throat.
+      // -------------------------------------------------------------------
+      const registerRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.54, 0.055, 10, mobileRender ? 28 : 44),
+        trimMat,
+      );
+      registerRing.rotation.y = Math.PI / 2;
+      registerRing.position.set(-4.25, -0.82, 0);
+      tagMaterial(registerRing, 1, 'utility');
+      mark(registerRing, name);
+      g.add(registerRing);
+
+      const vaneCount = mobileRender ? 8 : 12;
+      for (let i = 0; i < vaneCount; i += 1) {
+        const angle = (i / vaneCount) * Math.PI * 2;
+        const vane = box(0.18, 0.055, 0.28, trimMat);
+        vane.position.set(
+          -4.23,
+          -0.82 + Math.sin(angle) * 0.31,
+          Math.cos(angle) * 0.31,
+        );
+        vane.rotation.x = -angle + 0.42;
+        vane.rotation.z = 0.20;
+        tagMaterial(vane, 1, 'utility');
+        mark(vane, name);
+        g.add(vane);
+      }
+
+      // Short burner throat sleeve from register into front refractory.
+      const throatSleeve = cylinderX(0.42, 0.62, trimMat, 30);
+      throatSleeve.position.set(-4.00, -0.82, 0);
+      tagMaterial(throatSleeve, 1, 'utility');
+      mark(throatSleeve, name);
+      g.add(throatSleeve);
+
+      // -------------------------------------------------------------------
+      // Combustion-air system: plenum, scroll blower, motor and connecting duct.
+      // -------------------------------------------------------------------
+      const airPlenum = box(0.96, 1.04, 1.18, darkMat);
+      airPlenum.position.set(-5.62, -0.82, 0.16);
+      tagMaterial(airPlenum, 1, 'utility');
+      mark(airPlenum, name);
+      g.add(airPlenum);
+
+      const airDuct = box(0.78, 0.72, 0.78, paintedMat);
+      airDuct.position.set(-5.18, -0.82, 0.08);
+      tagMaterial(airDuct, 1, 'utility');
+      mark(airDuct, name);
+      g.add(airDuct);
+
+      const blowerScroll = new THREE.Mesh(
+        new THREE.TorusGeometry(0.50, 0.17, 12, mobileRender ? 28 : 44, Math.PI * 1.75),
+        paintedMat,
+      );
+      blowerScroll.rotation.y = Math.PI / 2;
+      blowerScroll.rotation.x = 0.24;
+      blowerScroll.position.set(-5.78, -0.06, 0.52);
+      tagMaterial(blowerScroll, 1, 'utility');
+      mark(blowerScroll, name);
+      g.add(blowerScroll);
+
+      const blowerHub = cylinderX(0.18, 0.25, trimMat, 20);
+      blowerHub.position.set(-5.80, -0.06, 0.52);
+      tagMaterial(blowerHub, 1, 'utility');
+      mark(blowerHub, name);
+      g.add(blowerHub);
+
+      const motor = cylinderX(0.27, 0.82, darkMat, 24);
+      motor.position.set(-6.30, -0.06, 0.52);
+      tagMaterial(motor, 1, 'utility');
+      mark(motor, name);
+      g.add(motor);
+
+      const motorFanGuard = cylinderX(0.33, 0.12, trimMat, 26);
+      motorFanGuard.position.set(-6.77, -0.06, 0.52);
+      tagMaterial(motorFanGuard, 1, 'utility');
+      mark(motorFanGuard, name);
+      g.add(motorFanGuard);
+
+      // -------------------------------------------------------------------
+      // Main fuel gun and nozzle.
+      // -------------------------------------------------------------------
+      const mainFuelLineA = cylinderBetween(
+        new THREE.Vector3(-6.42, -1.58, 0.92),
+        new THREE.Vector3(-5.58, -1.25, 0.58),
+        0.052,
+        mainFuelMat,
+        12,
+      );
+      const mainFuelLineB = cylinderBetween(
+        new THREE.Vector3(-5.58, -1.25, 0.58),
+        new THREE.Vector3(-4.94, -1.02, 0.20),
+        0.052,
+        mainFuelMat,
+        12,
+      );
+      [mainFuelLineA, mainFuelLineB].forEach(pipe => {
+        tagMaterial(pipe, 1, 'utility');
+        mark(pipe, name);
+        g.add(pipe);
+      });
+
+      const mainSolenoid = box(0.30, 0.36, 0.28, material('#3d5a68', 0.62, 0.44, 1, undefined, paintedSteelTex));
+      mainSolenoid.position.set(-5.52, -1.20, 0.56);
+      tagMaterial(mainSolenoid, 1, 'utility');
+      mark(mainSolenoid, name);
+      g.add(mainSolenoid);
+
+      const fuelGun = cylinderX(0.065, 1.55, trimMat, 16);
+      fuelGun.position.set(-4.42, -0.82, 0);
+      tagMaterial(fuelGun, 1, 'utility');
+      mark(fuelGun, name);
+      g.add(fuelGun);
+
+      const nozzleBody = cylinderX(0.12, 0.20, brassMat, 18);
+      nozzleBody.position.set(-3.63, -0.82, 0);
+      tagMaterial(nozzleBody, 1, 'utility');
+      mark(nozzleBody, name);
+      g.add(nozzleBody);
+
+      const nozzleTip = new THREE.Mesh(
+        new THREE.ConeGeometry(0.11, 0.28, 16),
+        brassMat,
+      );
+      nozzleTip.rotation.z = -Math.PI / 2;
+      nozzleTip.position.set(-3.49, -0.82, 0);
+      tagMaterial(nozzleTip, 1, 'utility');
+      mark(nozzleTip, name);
+      g.add(nozzleTip);
+
+      // -------------------------------------------------------------------
+      // Dedicated pilot burner and pilot gas train.
+      // -------------------------------------------------------------------
+      const pilotTube = cylinderBetween(
+        new THREE.Vector3(-5.60, -0.48, 0.35),
+        new THREE.Vector3(-3.78, -0.60, 0.22),
+        0.042,
+        pilotPipeMat,
+        12,
+      );
+      tagMaterial(pilotTube, 1, 'utility');
+      mark(pilotTube, name);
+      g.add(pilotTube);
+
+      const pilotBody = cylinderBetween(
+        new THREE.Vector3(-4.35, -0.56, 0.26),
+        new THREE.Vector3(-3.74, -0.60, 0.22),
+        0.070,
+        brassMat,
+        14,
+      );
+      tagMaterial(pilotBody, 1, 'utility');
+      mark(pilotBody, name);
+      g.add(pilotBody);
+
+      const pilotTip = new THREE.Mesh(
+        new THREE.ConeGeometry(0.085, 0.26, 14),
+        pilotPipeMat,
+      );
+      pilotTip.rotation.z = -Math.PI / 2;
+      pilotTip.position.set(-3.63, -0.61, 0.21);
+      tagMaterial(pilotTip, 1, 'utility');
+      mark(pilotTip, name);
+      g.add(pilotTip);
+
+      const pilotGasA = cylinderBetween(
+        new THREE.Vector3(-6.34, -1.36, 1.18),
+        new THREE.Vector3(-5.74, -0.98, 0.82),
+        0.036,
+        pilotPipeMat,
+        10,
+      );
+      const pilotGasB = cylinderBetween(
+        new THREE.Vector3(-5.74, -0.98, 0.82),
+        new THREE.Vector3(-5.58, -0.49, 0.36),
+        0.036,
+        pilotPipeMat,
+        10,
+      );
+      [pilotGasA, pilotGasB].forEach(pipe => {
+        tagMaterial(pipe, 1, 'utility');
+        mark(pipe, name);
+        g.add(pipe);
+      });
+
+      const pilotSolenoid = box(0.22, 0.28, 0.22, material('#3d5a68', 0.62, 0.44, 1, undefined, paintedSteelTex));
+      pilotSolenoid.position.set(-5.75, -0.95, 0.80);
+      tagMaterial(pilotSolenoid, 1, 'utility');
+      mark(pilotSolenoid, name);
+      g.add(pilotSolenoid);
+
+      // Small pilot flame exists separately from the main flame.
+      const pilotFlame = new THREE.Mesh(
+        new THREE.ConeGeometry(0.085, 0.72, mobileRender ? 12 : 18, 1, true),
+        new THREE.MeshPhysicalMaterial({
+          color: '#63b9ff',
+          emissive: '#3f8cff',
+          emissiveIntensity: mobileRender ? 1.0 : 1.5,
+          transparent: true,
+          opacity: 0.70,
+          metalness: 0,
+          roughness: 0.16,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      pilotFlame.rotation.z = -Math.PI / 2;
+      pilotFlame.position.set(-3.30, -0.61, 0.21);
+      tagMaterial(pilotFlame, 0.70, 'internal');
+      mark(pilotFlame, name);
+      g.add(pilotFlame);
+
+      // -------------------------------------------------------------------
+      // Ignition transformer, ceramic electrode and high-voltage cable.
+      // -------------------------------------------------------------------
+      const ignitionTransformer = box(0.48, 0.34, 0.40, material('#374952', 0.68, 0.42, 1, undefined, paintedSteelTex));
+      ignitionTransformer.position.set(-5.42, 0.10, -0.54);
+      tagMaterial(ignitionTransformer, 1, 'utility');
+      mark(ignitionTransformer, name);
+      g.add(ignitionTransformer);
+
+      const transformerCap = box(0.34, 0.08, 0.30, trimMat);
+      transformerCap.position.set(-5.42, 0.31, -0.54);
+      tagMaterial(transformerCap, 1, 'utility');
+      mark(transformerCap, name);
+      g.add(transformerCap);
+
+      const ceramicHolder = cylinderBetween(
+        new THREE.Vector3(-4.78, -0.30, -0.34),
+        new THREE.Vector3(-4.38, -0.46, -0.20),
+        0.050,
+        ceramicMat,
+        12,
+      );
+      tagMaterial(ceramicHolder, 1, 'utility');
+      mark(ceramicHolder, name);
+      g.add(ceramicHolder);
+
+      const ignitionElectrode = cylinderBetween(
+        new THREE.Vector3(-4.55, -0.39, -0.26),
+        new THREE.Vector3(-3.68, -0.67, -0.08),
+        0.018,
+        trimMat,
+        10,
+      );
+      tagMaterial(ignitionElectrode, 1, 'utility');
+      mark(ignitionElectrode, name);
+      g.add(ignitionElectrode);
+
+      const hvCable = new THREE.Mesh(
+        new THREE.TubeGeometry(
+          new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-5.28, 0.10, -0.48),
+            new THREE.Vector3(-5.02, -0.02, -0.44),
+            new THREE.Vector3(-4.82, -0.20, -0.38),
+            new THREE.Vector3(-4.68, -0.32, -0.30),
+          ]),
+          mobileRender ? 14 : 24,
+          0.022,
+          7,
+          false,
+        ),
+        cableMat,
+      );
+      tagMaterial(hvCable, 1, 'utility');
+      mark(hvCable, name);
+      g.add(hvCable);
+
+      // -------------------------------------------------------------------
+      // Flame scanner / UV-photo sensor with an aiming tube through the door.
+      // -------------------------------------------------------------------
+      const scannerTube = cylinderBetween(
+        new THREE.Vector3(-4.84, -0.10, 0.52),
+        new THREE.Vector3(-4.18, -0.48, 0.30),
+        0.060,
+        darkMat,
+        14,
+      );
+      tagMaterial(scannerTube, 1, 'utility');
+      mark(scannerTube, name);
+      g.add(scannerTube);
+
+      const scanner = box(0.42, 0.27, 0.32, material('#c3a45e', 0.70, 0.30));
+      scanner.position.set(-4.96, -0.02, 0.58);
+      scanner.rotation.z = -0.18;
+      tagMaterial(scanner, 1, 'utility');
+      mark(scanner, name);
+      g.add(scanner);
+
+      const scannerLens = new THREE.Mesh(
+        new THREE.CircleGeometry(0.082, 18),
+        new THREE.MeshPhysicalMaterial({
+          color: '#64d5ff',
+          roughness: 0.04,
+          metalness: 0,
+          transmission: mobileRender ? 0 : 0.28,
+          transparent: true,
+          opacity: 0.76,
+        }),
+      );
+      scannerLens.rotation.y = Math.PI / 2;
+      scannerLens.rotation.z = -0.18;
+      scannerLens.position.set(-4.73, -0.10, 0.52);
+      scannerLens.userData.component = name;
+      scannerLens.userData.kind = 'utility';
+      scannerLens.userData.baseOpacity = 0.76;
+      g.add(scannerLens);
+
+      // -------------------------------------------------------------------
+      // Existing main flame meshes are retained for this package phase.
+      // A separate flame-fidelity pass will replace their visual model.
+      // -------------------------------------------------------------------
       const flameMat = new THREE.MeshPhysicalMaterial({
         color: '#ff7a18',
         transparent: true,
@@ -612,101 +1026,6 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         side: THREE.DoubleSide,
         depthWrite: false,
       });
-
-      const body = cylinderX(0.60, 1.05, steelMat, mobileRender ? 30 : 44);
-      body.position.set(-4.83, -0.82, 0);
-      body.castShadow = !mobileRender;
-      tagMaterial(body, 1, 'utility');
-      mark(body, name);
-      g.add(body);
-
-      const throat = cylinderX(0.43, 0.58, trimMat, 32);
-      throat.position.set(-4.10, -0.82, 0);
-      tagMaterial(throat, 1, 'utility');
-      mark(throat, name);
-      g.add(throat);
-
-      const register = new THREE.Mesh(
-        new THREE.TorusGeometry(0.52, 0.055, 10, mobileRender ? 28 : 42),
-        trimMat,
-      );
-      register.rotation.y = Math.PI / 2;
-      register.position.set(-4.38, -0.82, 0);
-      tagMaterial(register, 1, 'utility');
-      mark(register, name);
-      g.add(register);
-
-      // Blower scroll / air box and drive motor.
-      const airBox = box(0.86, 0.96, 1.05, darkMat);
-      airBox.position.set(-5.48, -0.82, 0.18);
-      tagMaterial(airBox, 1, 'utility');
-      mark(airBox, name);
-      g.add(airBox);
-
-      const blower = new THREE.Mesh(
-        new THREE.TorusGeometry(0.48, 0.16, 12, mobileRender ? 28 : 40, Math.PI * 1.72),
-        steelMat,
-      );
-      blower.rotation.y = Math.PI / 2;
-      blower.rotation.x = 0.25;
-      blower.position.set(-5.62, -0.20, 0.48);
-      tagMaterial(blower, 1, 'utility');
-      mark(blower, name);
-      g.add(blower);
-
-      const motor = cylinderX(0.26, 0.72, darkMat, 24);
-      motor.position.set(-6.00, -0.20, 0.48);
-      tagMaterial(motor, 1, 'utility');
-      mark(motor, name);
-      g.add(motor);
-
-      const motorEnd = cylinderX(0.31, 0.12, trimMat, 24);
-      motorEnd.position.set(-6.38, -0.20, 0.48);
-      tagMaterial(motorEnd, 1, 'utility');
-      mark(motorEnd, name);
-      g.add(motorEnd);
-
-      // Fuel piping into the burner gun.
-      const fuelA = cylinderBetween(new THREE.Vector3(-6.05, -1.62, 1.05), new THREE.Vector3(-5.25, -1.25, 0.72), 0.055, copperMat, 12);
-      const fuelB = cylinderBetween(new THREE.Vector3(-5.25, -1.25, 0.72), new THREE.Vector3(-4.62, -0.92, 0.24), 0.055, copperMat, 12);
-      [fuelA, fuelB].forEach(pipe => {
-        tagMaterial(pipe, 1, 'utility');
-        mark(pipe, name);
-        g.add(pipe);
-      });
-
-      const nozzle = cylinderX(0.075, 0.66, trimMat, 16);
-      nozzle.position.set(-4.22, -0.82, 0);
-      tagMaterial(nozzle, 1, 'utility');
-      mark(nozzle, name);
-      g.add(nozzle);
-
-      // Ignition electrode and ceramic holder.
-      const igniter = cylinderBetween(new THREE.Vector3(-4.78, -0.22, 0.40), new THREE.Vector3(-4.02, -0.66, 0.14), 0.022, trimMat, 10);
-      tagMaterial(igniter, 1, 'utility');
-      mark(igniter, name);
-      g.add(igniter);
-      const ceramic = cylinderBetween(new THREE.Vector3(-4.84, -0.18, 0.43), new THREE.Vector3(-4.55, -0.35, 0.33), 0.055, ceramicMat, 12);
-      tagMaterial(ceramic, 1, 'utility');
-      mark(ceramic, name);
-      g.add(ceramic);
-
-      // Flame scanner with lens.
-      const scanner = box(0.36, 0.24, 0.30, material('#c3a45e', 0.70, 0.30));
-      scanner.position.set(-4.52, -0.18, 0.46);
-      tagMaterial(scanner, 1, 'utility');
-      mark(scanner, name);
-      g.add(scanner);
-      const scannerLens = new THREE.Mesh(
-        new THREE.CircleGeometry(0.075, 18),
-        new THREE.MeshPhysicalMaterial({ color: '#6dd8ff', roughness: 0.05, metalness: 0, transmission: mobileRender ? 0 : 0.25, transparent: true, opacity: 0.72 }),
-      );
-      scannerLens.rotation.y = Math.PI / 2;
-      scannerLens.position.set(-4.325, -0.18, 0.46);
-      scannerLens.userData.component = name;
-      scannerLens.userData.kind = 'utility';
-      scannerLens.userData.baseOpacity = 0.72;
-      g.add(scannerLens);
 
       const flame = new THREE.Mesh(
         new THREE.ConeGeometry(0.48, 3.15, mobileRender ? 18 : 30, 1, true),
@@ -731,7 +1050,12 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       g.add(flameCore);
       flameCoreMesh = flameCore;
 
-      addLabel(name, new THREE.Vector3(-5.0, 0.45, 1.15));
+      addLabel(name, new THREE.Vector3(-5.15, 0.72, 1.30));
+      addDetailLabel('AIR REGISTER', name, new THREE.Vector3(-4.35, 0.36, -0.82));
+      addDetailLabel('MAIN FUEL NOZZLE', name, new THREE.Vector3(-3.76, -1.36, -0.48));
+      addDetailLabel('PILOT BURNER', name, new THREE.Vector3(-3.82, -0.10, 0.88));
+      addDetailLabel('IGNITION ELECTRODE', name, new THREE.Vector3(-4.08, -0.05, -0.82));
+      addDetailLabel('FLAME SCANNER', name, new THREE.Vector3(-4.85, 0.54, 0.78));
     }
 
     // REAR SMOKEBOX
@@ -1575,9 +1899,18 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     state.labelGroup.children.forEach(label => {
       const componentName = label.userData.component as string | undefined;
-      label.visible = labels && (contextMode === 'full' || componentName === selected || contextMode === 'focus');
+      const detailLabel = Boolean(label.userData.detailLabel);
+      label.visible = detailLabel
+        ? labels && componentName === selected && contextMode !== 'full'
+        : labels && (contextMode === 'full' || componentName === selected || contextMode === 'focus');
       if (label instanceof THREE.Sprite) {
-        label.material.opacity = componentName === selected ? 1 : contextMode === 'full' ? 0.82 : 0.34;
+        label.material.opacity = detailLabel
+          ? (componentName === selected ? 0.96 : 0)
+          : componentName === selected
+            ? 1
+            : contextMode === 'full'
+              ? 0.82
+              : 0.34;
       }
     });
 

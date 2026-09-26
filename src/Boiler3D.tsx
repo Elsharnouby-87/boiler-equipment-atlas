@@ -518,112 +518,336 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Front Smokebox';
       const g = component(name);
-      const smoke = cylinderX(2.2, 0.65, material('#3c4c55', 0.8, 0.38));
+      const casingMat = material('#46575f', 0.82, 0.36, 1, undefined, darkSteelTex);
+      const doorMat = material('#66757c', 0.86, 0.30, 1, undefined, paintedSteelTex);
+      const trimMat = material('#a0aaae', 0.90, 0.24, 1, undefined, stainlessTex);
+
+      const smoke = cylinderX(2.20, 0.66, casingMat, mobileRender ? 40 : 60);
       smoke.position.x = -3.82;
-      tagMaterial(smoke, 0.92, 'shell');
+      smoke.castShadow = !mobileRender;
+      tagMaterial(smoke, 0.96, 'shell');
       mark(smoke, name);
       g.add(smoke);
-      const door = cylinderX(2.05, 0.12, material('#596c75', 0.84, 0.3));
-      door.position.x = -4.18;
+
+      const door = cylinderX(2.06, 0.14, doorMat, mobileRender ? 44 : 64);
+      door.position.x = -4.20;
       tagMaterial(door, 1, 'shell');
       mark(door, name);
       g.add(door);
+
+      const doorRing = cylinderX(1.93, 0.07, trimMat, 60);
+      doorRing.position.x = -4.30;
+      tagMaterial(doorRing, 1, 'utility');
+      mark(doorRing, name);
+      g.add(doorRing);
+      addBoltRingX(g, -4.36, 1.73, mobileRender ? 14 : 20, trimMat, name, 0.052);
+
+      // Hinges and dog-latch details.
+      [-0.82, 0.82].forEach(y => {
+        const hinge = box(0.36, 0.28, 0.32, casingMat);
+        hinge.position.set(-4.28, y, 2.02);
+        tagMaterial(hinge, 1, 'utility');
+        mark(hinge, name);
+        g.add(hinge);
+      });
+      const latchBar = box(0.16, 1.28, 0.12, trimMat);
+      latchBar.position.set(-4.34, 0.52, -1.78);
+      latchBar.rotation.x = -0.18;
+      tagMaterial(latchBar, 1, 'utility');
+      mark(latchBar, name);
+      g.add(latchBar);
+
+      // Burner mounting flange and refractory throat.
+      addFlangeX(g, -4.34, -0.82, 0, 0.76, 0.45, 0.12, trimMat, name);
+      addBoltRingX(g, -4.42, 0.62, mobileRender ? 8 : 12, trimMat, name, 0.040, -0.82, 0);
+      const throatLining = cylinderX(0.63, 0.24, material('#9a7658', 0.05, 0.92, 1, undefined, refractoryTex), 32);
+      throatLining.position.set(-4.09, -0.82, 0);
+      tagMaterial(throatLining, 1, 'utility');
+      mark(throatLining, name);
+      g.add(throatLining);
+
       addLabel(name, new THREE.Vector3(-4.0, 2.45, 0));
     }
     {
       const name = 'Burner & Ignition';
       const g = component(name);
-      const body = cylinderX(0.58, 1.0, material('#4f626d', 0.82, 0.34));
-      body.position.set(-4.68, -0.82, 0);
+      const steelMat = material('#556872', 0.84, 0.32, 1, undefined, paintedSteelTex);
+      const darkMat = material('#2e3a40', 0.86, 0.36, 1, undefined, darkSteelTex);
+      const trimMat = material('#a5b0b5', 0.90, 0.24, 1, undefined, stainlessTex);
+      const copperMat = material('#8a532f', 0.78, 0.34);
+      const ceramicMat = material('#ddd9c8', 0.05, 0.62);
+      const flameMat = new THREE.MeshPhysicalMaterial({
+        color: '#ff7a18',
+        transparent: true,
+        opacity: 0.72,
+        emissive: '#ff3d09',
+        emissiveIntensity: mobileRender ? 1.1 : 1.7,
+        metalness: 0,
+        roughness: 0.25,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const flameCoreMat = new THREE.MeshBasicMaterial({
+        color: '#ffd36b',
+        transparent: true,
+        opacity: 0.65,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+
+      const body = cylinderX(0.60, 1.05, steelMat, mobileRender ? 30 : 44);
+      body.position.set(-4.83, -0.82, 0);
+      body.castShadow = !mobileRender;
       tagMaterial(body, 1, 'utility');
       mark(body, name);
       g.add(body);
 
-      const throat = cylinderX(0.42, 0.5, material('#8c9394', 0.65, 0.38));
-      throat.position.set(-4.05, -0.82, 0);
+      const throat = cylinderX(0.43, 0.58, trimMat, 32);
+      throat.position.set(-4.10, -0.82, 0);
       tagMaterial(throat, 1, 'utility');
       mark(throat, name);
       g.add(throat);
 
-      const flame = new THREE.Mesh(
-        new THREE.ConeGeometry(0.46, 2.9, 26, 1, true),
-        material('#ff7a18', 0.02, 0.2, 0.83, '#ff4311'),
+      const register = new THREE.Mesh(
+        new THREE.TorusGeometry(0.52, 0.055, 10, mobileRender ? 28 : 42),
+        trimMat,
       );
-      flame.rotation.z = -Math.PI / 2;
-      flame.position.set(-2.45, -0.82, 0);
-      tagMaterial(flame, 0.83, 'internal');
-      mark(flame, name);
-      g.add(flame);
+      register.rotation.y = Math.PI / 2;
+      register.position.set(-4.38, -0.82, 0);
+      tagMaterial(register, 1, 'utility');
+      mark(register, name);
+      g.add(register);
 
-      const scanner = box(0.35, 0.24, 0.28, material('#c7aa5c', 0.72, 0.28));
-      scanner.position.set(-4.38, -0.18, 0.42);
+      // Blower scroll / air box and drive motor.
+      const airBox = box(0.86, 0.96, 1.05, darkMat);
+      airBox.position.set(-5.48, -0.82, 0.18);
+      tagMaterial(airBox, 1, 'utility');
+      mark(airBox, name);
+      g.add(airBox);
+
+      const blower = new THREE.Mesh(
+        new THREE.TorusGeometry(0.48, 0.16, 12, mobileRender ? 28 : 40, Math.PI * 1.72),
+        steelMat,
+      );
+      blower.rotation.y = Math.PI / 2;
+      blower.rotation.x = 0.25;
+      blower.position.set(-5.62, -0.20, 0.48);
+      tagMaterial(blower, 1, 'utility');
+      mark(blower, name);
+      g.add(blower);
+
+      const motor = cylinderX(0.26, 0.72, darkMat, 24);
+      motor.position.set(-6.00, -0.20, 0.48);
+      tagMaterial(motor, 1, 'utility');
+      mark(motor, name);
+      g.add(motor);
+
+      const motorEnd = cylinderX(0.31, 0.12, trimMat, 24);
+      motorEnd.position.set(-6.38, -0.20, 0.48);
+      tagMaterial(motorEnd, 1, 'utility');
+      mark(motorEnd, name);
+      g.add(motorEnd);
+
+      // Fuel piping into the burner gun.
+      const fuelA = cylinderBetween(new THREE.Vector3(-6.05, -1.62, 1.05), new THREE.Vector3(-5.25, -1.25, 0.72), 0.055, copperMat, 12);
+      const fuelB = cylinderBetween(new THREE.Vector3(-5.25, -1.25, 0.72), new THREE.Vector3(-4.62, -0.92, 0.24), 0.055, copperMat, 12);
+      [fuelA, fuelB].forEach(pipe => {
+        tagMaterial(pipe, 1, 'utility');
+        mark(pipe, name);
+        g.add(pipe);
+      });
+
+      const nozzle = cylinderX(0.075, 0.66, trimMat, 16);
+      nozzle.position.set(-4.22, -0.82, 0);
+      tagMaterial(nozzle, 1, 'utility');
+      mark(nozzle, name);
+      g.add(nozzle);
+
+      // Ignition electrode and ceramic holder.
+      const igniter = cylinderBetween(new THREE.Vector3(-4.78, -0.22, 0.40), new THREE.Vector3(-4.02, -0.66, 0.14), 0.022, trimMat, 10);
+      tagMaterial(igniter, 1, 'utility');
+      mark(igniter, name);
+      g.add(igniter);
+      const ceramic = cylinderBetween(new THREE.Vector3(-4.84, -0.18, 0.43), new THREE.Vector3(-4.55, -0.35, 0.33), 0.055, ceramicMat, 12);
+      tagMaterial(ceramic, 1, 'utility');
+      mark(ceramic, name);
+      g.add(ceramic);
+
+      // Flame scanner with lens.
+      const scanner = box(0.36, 0.24, 0.30, material('#c3a45e', 0.70, 0.30));
+      scanner.position.set(-4.52, -0.18, 0.46);
       tagMaterial(scanner, 1, 'utility');
       mark(scanner, name);
       g.add(scanner);
-      addLabel(name, new THREE.Vector3(-4.7, 0.35, 1.1));
+      const scannerLens = new THREE.Mesh(
+        new THREE.CircleGeometry(0.075, 18),
+        new THREE.MeshPhysicalMaterial({ color: '#6dd8ff', roughness: 0.05, metalness: 0, transmission: mobileRender ? 0 : 0.25, transparent: true, opacity: 0.72 }),
+      );
+      scannerLens.rotation.y = Math.PI / 2;
+      scannerLens.position.set(-4.325, -0.18, 0.46);
+      scannerLens.userData.component = name;
+      scannerLens.userData.kind = 'utility';
+      scannerLens.userData.baseOpacity = 0.72;
+      g.add(scannerLens);
+
+      const flame = new THREE.Mesh(
+        new THREE.ConeGeometry(0.48, 3.15, mobileRender ? 18 : 30, 1, true),
+        flameMat,
+      );
+      flame.rotation.z = -Math.PI / 2;
+      flame.position.set(-2.42, -0.82, 0);
+      tagMaterial(flame, 0.72, 'internal');
+      mark(flame, name);
+      g.add(flame);
+
+      const flameCore = new THREE.Mesh(
+        new THREE.ConeGeometry(0.22, 1.75, mobileRender ? 14 : 22, 1, true),
+        flameCoreMat,
+      );
+      flameCore.rotation.z = -Math.PI / 2;
+      flameCore.position.set(-3.05, -0.82, 0);
+      flameCore.userData.component = name;
+      flameCore.userData.kind = 'internal';
+      flameCore.userData.baseOpacity = 0.65;
+      g.add(flameCore);
+
+      addLabel(name, new THREE.Vector3(-5.0, 0.45, 1.15));
     }
 
     // REAR SMOKEBOX
     {
       const name = 'Rear Smokebox';
       const g = component(name);
-      const smoke = cylinderX(2.18, 0.7, material('#3d4d55', 0.8, 0.38));
-      smoke.position.x = 3.82;
-      tagMaterial(smoke, 0.92, 'shell');
+      const casingMat = material('#46575f', 0.82, 0.36, 1, undefined, darkSteelTex);
+      const doorMat = material('#63737a', 0.84, 0.31, 1, undefined, paintedSteelTex);
+      const trimMat = material('#9da8ad', 0.89, 0.24, 1, undefined, stainlessTex);
+
+      const smoke = cylinderX(2.18, 0.72, casingMat, mobileRender ? 40 : 60);
+      smoke.position.x = 3.84;
+      tagMaterial(smoke, 0.96, 'shell');
       mark(smoke, name);
       g.add(smoke);
-      addLabel(name, new THREE.Vector3(4.0, 2.35, 0));
+
+      const door = cylinderX(2.02, 0.13, doorMat, mobileRender ? 44 : 64);
+      door.position.x = 4.23;
+      tagMaterial(door, 1, 'shell');
+      mark(door, name);
+      g.add(door);
+
+      const doorRing = cylinderX(1.90, 0.07, trimMat, 60);
+      doorRing.position.x = 4.32;
+      tagMaterial(doorRing, 1, 'utility');
+      mark(doorRing, name);
+      g.add(doorRing);
+      addBoltRingX(g, 4.38, 1.70, mobileRender ? 14 : 20, trimMat, name, 0.052);
+
+      [-0.82, 0.82].forEach(y => {
+        const hinge = box(0.34, 0.28, 0.30, casingMat);
+        hinge.position.set(4.30, y, -2.0);
+        tagMaterial(hinge, 1, 'utility');
+        mark(hinge, name);
+        g.add(hinge);
+      });
+
+      addLabel(name, new THREE.Vector3(4.15, 2.45, 0));
     }
 
     // ECONOMIZER
     {
       const name = 'Economizer';
       const g = component(name);
-      const casing = box(1.45, 1.55, 2.25, material('#405762', 0.68, 0.42, 0.32));
-      casing.position.set(4.45, 2.05, 0);
-      tagMaterial(casing, 0.32, 'shell');
+      const casingMat = material('#405762', 0.70, 0.42, 0.34, undefined, paintedSteelTex);
+      const tubeMat = material('#7495a1', 0.82, 0.30, 1, undefined, stainlessTex);
+      const headerMat = material('#556d77', 0.84, 0.31, 1, undefined, darkSteelTex);
+
+      const casing = box(1.68, 1.82, 2.42, casingMat);
+      casing.position.set(4.78, 2.08, 0);
+      tagMaterial(casing, 0.34, 'shell');
       mark(casing, name);
       g.add(casing);
 
-      for (let i = -2; i <= 2; i += 1) {
-        const tube = cylinderX(0.08, 1.15, material('#6ab7ce', 0.75, 0.3), 16);
-        tube.position.set(4.45, 1.65 + (i + 2) * 0.2, i * 0.32);
-        tagMaterial(tube, 1, 'internal');
-        mark(tube, name);
-        g.add(tube);
+      const accessPanel = box(0.04, 1.18, 1.72, material('#596c75', 0.78, 0.39, 1, undefined, paintedSteelTex));
+      accessPanel.position.set(3.92, 2.05, 0);
+      tagMaterial(accessPanel, 1, 'utility');
+      mark(accessPanel, name);
+      g.add(accessPanel);
+
+      const tubeRows = mobileRender ? 5 : 7;
+      for (let row = 0; row < tubeRows; row += 1) {
+        const y = 1.48 + row * (0.98 / Math.max(1, tubeRows - 1));
+        [-0.28, 0.28].forEach(dx => {
+          const tube = cylinderBetween(
+            new THREE.Vector3(4.78 + dx, y, -0.88),
+            new THREE.Vector3(4.78 + dx, y, 0.88),
+            0.055,
+            tubeMat,
+            mobileRender ? 9 : 12,
+          );
+          tagMaterial(tube, 1, 'internal');
+          mark(tube, name);
+          g.add(tube);
+        });
       }
 
-      const feedIn = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1.0, 18), material('#56b9df', 0.72, 0.28));
-      feedIn.rotation.x = Math.PI / 2;
-      feedIn.position.set(4.45, 2.0, 1.55);
+      const leftHeader = cylinderY(0.12, 1.25, headerMat, 18);
+      leftHeader.position.set(4.48, 2.00, -0.98);
+      tagMaterial(leftHeader, 1, 'utility');
+      mark(leftHeader, name);
+      g.add(leftHeader);
+      const rightHeader = cylinderY(0.12, 1.25, headerMat, 18);
+      rightHeader.position.set(5.08, 2.00, 0.98);
+      tagMaterial(rightHeader, 1, 'utility');
+      mark(rightHeader, name);
+      g.add(rightHeader);
+
+      const feedIn = cylinderBetween(new THREE.Vector3(4.48, 2.55, -0.98), new THREE.Vector3(4.48, 2.55, -1.60), 0.105, material('#56b9df', 0.72, 0.28), 16);
       tagMaterial(feedIn, 1, 'utility');
       mark(feedIn, name);
       g.add(feedIn);
 
-      const duct = box(1.0, 0.55, 1.1, material('#475a63', 0.8, 0.36));
-      duct.position.set(3.85, 1.35, 0);
+      const duct = box(1.18, 0.62, 1.20, material('#475a63', 0.82, 0.36, 1, undefined, darkSteelTex));
+      duct.position.set(4.10, 1.30, 0);
       tagMaterial(duct, 1, 'utility');
       mark(duct, name);
       g.add(duct);
 
-      addLabel(name, new THREE.Vector3(4.55, 3.2, 1.0));
+      addLabel(name, new THREE.Vector3(4.85, 3.35, 1.15));
     }
 
     // STACK
     {
       const name = 'Stack / Flue Outlet';
       const g = component(name);
-      const riser = cylinderY(0.48, 2.6, material('#485b65', 0.8, 0.35), 28);
-      riser.position.set(4.45, 3.95, 0);
-      tagMaterial(riser, 1, 'utility');
-      mark(riser, name);
-      g.add(riser);
-      const base = box(1.05, 0.75, 1.2, material('#43545d', 0.8, 0.38));
-      base.position.set(4.45, 2.95, 0);
+      const stackMat = material('#4d5f67', 0.82, 0.34, 1, undefined, darkSteelTex);
+      const trimMat = material('#849197', 0.86, 0.28, 1, undefined, stainlessTex);
+
+      const base = box(1.14, 0.78, 1.22, stackMat);
+      base.position.set(4.78, 3.18, 0);
       tagMaterial(base, 1, 'utility');
       mark(base, name);
       g.add(base);
-      addLabel(name, new THREE.Vector3(4.5, 5.45, 0));
+
+      const riser = cylinderY(0.50, 2.75, stackMat, mobileRender ? 26 : 36);
+      riser.position.set(4.78, 4.72, 0);
+      tagMaterial(riser, 1, 'utility');
+      mark(riser, name);
+      g.add(riser);
+
+      const baseFlange = new THREE.Mesh(new THREE.TorusGeometry(0.54, 0.045, 9, 30), trimMat);
+      baseFlange.rotation.x = Math.PI / 2;
+      baseFlange.position.set(4.78, 3.40, 0);
+      tagMaterial(baseFlange, 1, 'utility');
+      mark(baseFlange, name);
+      g.add(baseFlange);
+
+      const topRim = new THREE.Mesh(new THREE.TorusGeometry(0.51, 0.035, 8, 28), trimMat);
+      topRim.rotation.x = Math.PI / 2;
+      topRim.position.set(4.78, 6.10, 0);
+      tagMaterial(topRim, 1, 'utility');
+      mark(topRim, name);
+      g.add(topRim);
+
+      addLabel(name, new THREE.Vector3(4.85, 6.45, 0));
     }
 
     // SAFETY VALVE

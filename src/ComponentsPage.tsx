@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Flame, Gauge, ShieldCheck, Waves, X } from 'lucide-react';
 import Boiler3D from './Boiler3D';
 import GlobalNavigation, { type NavigationTarget } from './GlobalNavigation';
@@ -70,7 +70,7 @@ const systems: Record<SystemId, {
   },
 };
 
-const systemOrder: { id: SystemId; label: string; icon: JSX.Element }[] = [
+const systemOrder: { id: SystemId; label: string; icon: ReactNode }[] = [
   { id: 'combustion', label: 'Combustion', icon: <Flame size={15} /> },
   { id: 'pressure', label: 'Pressure Vessel', icon: <Gauge size={15} /> },
   { id: 'waterSteam', label: 'Water & Steam', icon: <Waves size={15} /> },

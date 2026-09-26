@@ -39,7 +39,7 @@ type Detail = {
 };
 
 const componentGroups = [
-  { label: 'Combustion & Gas Path', components: ['Burner & Ignition', 'Furnace Tube', 'Fire Tubes', 'Front Smokebox', 'Rear Smokebox', 'Stack / Flue Outlet'] },
+  { label: 'Combustion & Gas Path', components: ['Burner & Ignition', 'Furnace Tube', 'Fire Tubes', 'Front Smokebox', 'Rear Smokebox', 'Economizer', 'Stack / Flue Outlet'] },
   { label: 'Pressure Vessel', components: ['Boiler Shell', 'Tube Sheets'] },
   { label: 'Water & Steam', components: ['Water Space', 'Steam Space', 'Feedwater Inlet', 'Steam Outlet'] },
   { label: 'Safety & Controls', components: ['Level Gauge', 'Level Sensors', 'Pressure Controls', 'Safety Valve'] },
@@ -212,6 +212,17 @@ const details: Record<string, Detail> = {
     inspection: ['Rear door/access', 'Tube ends', 'Gas-side deposits'],
     related: ['Fire Tubes', 'Stack / Flue Outlet', 'Tube Sheets'],
   },
+  Economizer: {
+    group: 'Heat Recovery',
+    location: 'In the flue-gas path downstream of the main boiler heat-transfer surfaces and upstream of final gas discharge.',
+    summary: 'A feedwater heat-recovery exchanger using remaining flue-gas heat.',
+    function: 'Transfers sensible heat from boiler exhaust gas into incoming feedwater before the water enters the boiler.',
+    why: 'The supplied training material presents the economizer as a way to raise feedwater temperature, lower exhaust temperature and reduce fuel demand.',
+    observe: ['Feedwater inlet/outlet temperature trend', 'Flue-gas temperature trend', 'Leakage', 'Fouling or restriction'],
+    issues: ['Gas-side fouling', 'Water-side leakage', 'Corrosion from excessive gas cooling', 'Flow restriction'],
+    inspection: ['Casing and access points', 'Tube bank condition where visible', 'Water connections', 'Gas-path cleanliness'],
+    related: ['Stack / Flue Outlet', 'Feedwater Inlet', 'Rear Smokebox'],
+  },
   'Stack / Flue Outlet': {
     group: 'Combustion & Gas Path',
     location: 'Combustion-gas discharge from the boiler.',
@@ -240,6 +251,7 @@ const smartMode: Record<string, ViewMode> = {
   'Boiler Shell': 'normal',
   'Front Smokebox': 'normal',
   'Rear Smokebox': 'normal',
+  Economizer: 'cutaway',
   'Stack / Flue Outlet': 'normal',
   'Safety Valve': 'normal',
   'Steam Outlet': 'normal',

@@ -245,8 +245,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Water Space';
       const g = component(name);
-      const water = box(7.35, 2.3, 3.85, material('#1d9bd1', 0.08, 0.2, 0.12));
-      water.position.y = -0.75;
+      const waterMat = material('#1d9bd1', 0.08, 0.2, 0.12);
+      waterMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.62)];
+      const water = cylinderX(2.16, 7.45, waterMat, 56);
       tagMaterial(water, 0.12, 'fluid');
       mark(water, name);
       g.add(water);
@@ -255,8 +256,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Steam Space';
       const g = component(name);
-      const steam = box(7.2, 1.05, 3.75, material('#d9f4ff', 0.02, 0.18, 0.085));
-      steam.position.y = 1.35;
+      const steamMat = material('#d9f4ff', 0.02, 0.18, 0.085);
+      steamMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.62)];
+      const steam = cylinderX(2.15, 7.4, steamMat, 56);
       tagMaterial(steam, 0.085, 'fluid');
       mark(steam, name);
       g.add(steam);

@@ -48,6 +48,8 @@ type SceneState = {
   flowGroup: THREE.Group;
   highlight: THREE.Box3Helper;
   selectionGlow: THREE.PointLight;
+  burnerKey: THREE.PointLight;
+  burnerFill: THREE.PointLight;
   mobileRender: boolean;
 };
 
@@ -69,7 +71,7 @@ const explodeOffsets: Record<string, THREE.Vector3> = {
 };
 
 const cameraHints: Record<string, Partial<Pick<CameraPreset, 'yaw' | 'pitch'>>> = {
-  'Burner & Ignition': { yaw: -1.16, pitch: 0.10 },
+  'Burner & Ignition': { yaw: -1.30, pitch: 0.08 },
   'Front Smokebox': { yaw: -Math.PI / 2, pitch: 0.10 },
   'Furnace Tube': { yaw: -0.82, pitch: 0.10 },
   'Fire Tubes': { yaw: -0.72, pitch: 0.14 },
@@ -311,6 +313,16 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const fireLight = new THREE.PointLight('#ff6b1a', 3.2, 14, 2);
     fireLight.position.set(-2.4, -0.7, 0);
     scene.add(fireLight);
+
+    const burnerKey = new THREE.PointLight('#cdeeff', mobileRender ? 2.4 : 3.0, 8.5, 2);
+    burnerKey.position.set(-5.2, 0.65, 2.35);
+    burnerKey.visible = false;
+    scene.add(burnerKey);
+
+    const burnerFill = new THREE.PointLight('#ffb66e', mobileRender ? 1.2 : 1.7, 6.0, 2);
+    burnerFill.position.set(-4.15, -0.55, 1.45);
+    burnerFill.visible = false;
+    scene.add(burnerFill);
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(12.8, mobileRender ? 40 : 72),
@@ -635,14 +647,14 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const name = 'Burner & Ignition';
       const g = component(name);
 
-      const paintedMat = material('#586d77', 0.84, 0.31, 1, undefined, paintedSteelTex);
-      const darkMat = material('#2d3940', 0.86, 0.37, 1, undefined, darkSteelTex);
-      const trimMat = material('#a7b2b7', 0.90, 0.23, 1, undefined, stainlessTex);
-      const brassMat = material('#a97b42', 0.70, 0.31);
-      const pilotPipeMat = material('#c6a45a', 0.73, 0.28);
-      const mainFuelMat = material('#8a532f', 0.78, 0.34);
-      const ceramicMat = material('#e3dfd0', 0.04, 0.64);
-      const cableMat = material('#22292d', 0.28, 0.62);
+      const paintedMat = material('#718994', 0.74, 0.31, 1, undefined, paintedSteelTex);
+      const darkMat = material('#465760', 0.76, 0.36, 1, undefined, darkSteelTex);
+      const trimMat = material('#b9c5ca', 0.90, 0.22, 1, undefined, stainlessTex);
+      const brassMat = material('#c89549', 0.68, 0.28);
+      const pilotPipeMat = material('#e0bb61', 0.70, 0.25);
+      const mainFuelMat = material('#a9633e', 0.72, 0.32);
+      const ceramicMat = material('#f0ead8', 0.04, 0.58);
+      const cableMat = material('#39464d', 0.22, 0.58);
 
       // -------------------------------------------------------------------
       // Main burner body / windbox.  The main axis points directly into
@@ -708,17 +720,35 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(registerRing, name);
       g.add(registerRing);
 
+      const registerHub = cylinderX(0.14, 0.18, brassMat, 20);
+      registerHub.position.set(-4.20, -0.82, 0);
+      tagMaterial(registerHub, 1, 'utility');
+      mark(registerHub, name);
+      g.add(registerHub);
+
       const vaneCount = mobileRender ? 8 : 12;
       for (let i = 0; i < vaneCount; i += 1) {
         const angle = (i / vaneCount) * Math.PI * 2;
-        const vane = box(0.18, 0.055, 0.28, trimMat);
-        vane.position.set(
-          -4.23,
-          -0.82 + Math.sin(angle) * 0.31,
-          Math.cos(angle) * 0.31,
+        const end = new THREE.Vector3(
+          -4.20,
+          -0.82 + Math.sin(angle) * 0.34,
+          Math.cos(angle) * 0.34,
         );
-        vane.rotation.x = -angle + 0.42;
-        vane.rotation.z = 0.20;
+        const spoke = cylinderBetween(
+          new THREE.Vector3(-4.20, -0.82, 0),
+          end,
+          0.020,
+          trimMat,
+          8,
+        );
+        tagMaterial(spoke, 1, 'utility');
+        mark(spoke, name);
+        g.add(spoke);
+
+        const vane = box(0.17, 0.052, 0.24, trimMat);
+        vane.position.copy(end);
+        vane.rotation.x = -angle + 0.48;
+        vane.rotation.z = 0.18;
         tagMaterial(vane, 1, 'utility');
         mark(vane, name);
         g.add(vane);
@@ -779,15 +809,15 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       // Main fuel gun and nozzle.
       // -------------------------------------------------------------------
       const mainFuelLineA = cylinderBetween(
-        new THREE.Vector3(-6.42, -1.58, 0.92),
-        new THREE.Vector3(-5.58, -1.25, 0.58),
+        new THREE.Vector3(-6.32, -1.06, 0.58),
+        new THREE.Vector3(-5.55, -1.02, 0.48),
         0.052,
         mainFuelMat,
         12,
       );
       const mainFuelLineB = cylinderBetween(
-        new THREE.Vector3(-5.58, -1.25, 0.58),
-        new THREE.Vector3(-4.94, -1.02, 0.20),
+        new THREE.Vector3(-5.55, -1.02, 0.48),
+        new THREE.Vector3(-4.92, -0.96, 0.22),
         0.052,
         mainFuelMat,
         12,
@@ -799,7 +829,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       });
 
       const mainSolenoid = box(0.30, 0.36, 0.28, material('#3d5a68', 0.62, 0.44, 1, undefined, paintedSteelTex));
-      mainSolenoid.position.set(-5.52, -1.20, 0.56);
+      mainSolenoid.position.set(-5.55, -1.01, 0.48);
       tagMaterial(mainSolenoid, 1, 'utility');
       mark(mainSolenoid, name);
       g.add(mainSolenoid);
@@ -830,8 +860,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       // Dedicated pilot burner and pilot gas train.
       // -------------------------------------------------------------------
       const pilotTube = cylinderBetween(
-        new THREE.Vector3(-5.60, -0.48, 0.35),
-        new THREE.Vector3(-3.78, -0.60, 0.22),
+        new THREE.Vector3(-5.42, -0.42, 0.48),
+        new THREE.Vector3(-3.76, -0.58, 0.24),
         0.042,
         pilotPipeMat,
         12,
@@ -862,15 +892,15 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       g.add(pilotTip);
 
       const pilotGasA = cylinderBetween(
-        new THREE.Vector3(-6.34, -1.36, 1.18),
-        new THREE.Vector3(-5.74, -0.98, 0.82),
+        new THREE.Vector3(-6.18, -0.50, 0.72),
+        new THREE.Vector3(-5.72, -0.46, 0.62),
         0.036,
         pilotPipeMat,
         10,
       );
       const pilotGasB = cylinderBetween(
-        new THREE.Vector3(-5.74, -0.98, 0.82),
-        new THREE.Vector3(-5.58, -0.49, 0.36),
+        new THREE.Vector3(-5.72, -0.46, 0.62),
+        new THREE.Vector3(-5.40, -0.42, 0.48),
         0.036,
         pilotPipeMat,
         10,
@@ -882,7 +912,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       });
 
       const pilotSolenoid = box(0.22, 0.28, 0.22, material('#3d5a68', 0.62, 0.44, 1, undefined, paintedSteelTex));
-      pilotSolenoid.position.set(-5.75, -0.95, 0.80);
+      pilotSolenoid.position.set(-5.72, -0.46, 0.62);
       tagMaterial(pilotSolenoid, 1, 'utility');
       mark(pilotSolenoid, name);
       g.add(pilotSolenoid);
@@ -912,38 +942,60 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       // Ignition transformer, ceramic electrode and high-voltage cable.
       // -------------------------------------------------------------------
       const ignitionTransformer = box(0.48, 0.34, 0.40, material('#374952', 0.68, 0.42, 1, undefined, paintedSteelTex));
-      ignitionTransformer.position.set(-5.42, 0.10, -0.54);
+      ignitionTransformer.position.set(-5.36, -0.05, -0.58);
       tagMaterial(ignitionTransformer, 1, 'utility');
       mark(ignitionTransformer, name);
       g.add(ignitionTransformer);
 
       const transformerCap = box(0.34, 0.08, 0.30, trimMat);
-      transformerCap.position.set(-5.42, 0.31, -0.54);
+      transformerCap.position.set(-5.36, 0.16, -0.58);
       tagMaterial(transformerCap, 1, 'utility');
       mark(transformerCap, name);
       g.add(transformerCap);
 
-      const ceramicHolder = cylinderBetween(
-        new THREE.Vector3(-4.78, -0.30, -0.34),
-        new THREE.Vector3(-4.38, -0.46, -0.20),
-        0.050,
-        ceramicMat,
-        12,
-      );
-      tagMaterial(ceramicHolder, 1, 'utility');
-      mark(ceramicHolder, name);
-      g.add(ceramicHolder);
+      const electrodeStarts = [
+        new THREE.Vector3(-4.78, -0.34, -0.27),
+        new THREE.Vector3(-4.78, -0.28, -0.43),
+      ];
+      const electrodeEnds = [
+        new THREE.Vector3(-3.68, -0.68, -0.07),
+        new THREE.Vector3(-3.70, -0.62, -0.20),
+      ];
+      electrodeStarts.forEach((start, i) => {
+        const ceramicHolder = cylinderBetween(
+          start,
+          start.clone().lerp(electrodeEnds[i], 0.34),
+          0.050,
+          ceramicMat,
+          12,
+        );
+        tagMaterial(ceramicHolder, 1, 'utility');
+        mark(ceramicHolder, name);
+        g.add(ceramicHolder);
 
-      const ignitionElectrode = cylinderBetween(
-        new THREE.Vector3(-4.55, -0.39, -0.26),
-        new THREE.Vector3(-3.68, -0.67, -0.08),
-        0.018,
-        trimMat,
-        10,
+        const electrode = cylinderBetween(
+          start.clone().lerp(electrodeEnds[i], 0.30),
+          electrodeEnds[i],
+          0.017,
+          trimMat,
+          10,
+        );
+        tagMaterial(electrode, 1, 'utility');
+        mark(electrode, name);
+        g.add(electrode);
+      });
+
+      const sparkGap = cylinderBetween(
+        electrodeEnds[0],
+        electrodeEnds[1],
+        0.010,
+        new THREE.MeshBasicMaterial({ color: '#b9e6ff', transparent: true, opacity: 0.88 }),
+        7,
       );
-      tagMaterial(ignitionElectrode, 1, 'utility');
-      mark(ignitionElectrode, name);
-      g.add(ignitionElectrode);
+      sparkGap.userData.component = name;
+      sparkGap.userData.kind = 'utility';
+      sparkGap.userData.baseOpacity = 0.88;
+      g.add(sparkGap);
 
       const hvCable = new THREE.Mesh(
         new THREE.TubeGeometry(
@@ -978,27 +1030,40 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(scannerTube, name);
       g.add(scannerTube);
 
-      const scanner = box(0.42, 0.27, 0.32, material('#c3a45e', 0.70, 0.30));
-      scanner.position.set(-4.96, -0.02, 0.58);
-      scanner.rotation.z = -0.18;
+      const scanner = cylinderBetween(
+        new THREE.Vector3(-5.16, 0.02, 0.70),
+        new THREE.Vector3(-4.82, -0.08, 0.58),
+        0.135,
+        material('#b69149', 0.72, 0.28),
+        18,
+      );
       tagMaterial(scanner, 1, 'utility');
       mark(scanner, name);
       g.add(scanner);
 
+      const scannerRearCap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.14, mobileRender ? 12 : 18, 8),
+        darkMat,
+      );
+      scannerRearCap.position.set(-5.18, 0.03, 0.71);
+      tagMaterial(scannerRearCap, 1, 'utility');
+      mark(scannerRearCap, name);
+      g.add(scannerRearCap);
+
       const scannerLens = new THREE.Mesh(
-        new THREE.CircleGeometry(0.082, 18),
+        new THREE.SphereGeometry(0.095, mobileRender ? 12 : 18, 8),
         new THREE.MeshPhysicalMaterial({
           color: '#64d5ff',
           roughness: 0.04,
           metalness: 0,
           transmission: mobileRender ? 0 : 0.28,
           transparent: true,
-          opacity: 0.76,
+          opacity: 0.78,
+          emissive: '#2b8dc1',
+          emissiveIntensity: 0.35,
         }),
       );
-      scannerLens.rotation.y = Math.PI / 2;
-      scannerLens.rotation.z = -0.18;
-      scannerLens.position.set(-4.73, -0.10, 0.52);
+      scannerLens.position.set(-4.76, -0.10, 0.56);
       scannerLens.userData.component = name;
       scannerLens.userData.kind = 'utility';
       scannerLens.userData.baseOpacity = 0.76;
@@ -1819,7 +1884,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     animate();
 
     renderer.compile(scene, camera);
-    stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, highlight, selectionGlow, mobileRender };
+    stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, highlight, selectionGlow, burnerKey, burnerFill, mobileRender };
     fitObject(root, mobileRender ? 1.62 : 1.4, 0);
 
     return () => {
@@ -1923,6 +1988,10 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
               : 0.34;
       }
     });
+
+    const burnerStudy = selected === 'Burner & Ignition' || selected === 'Front Smokebox';
+    state.burnerKey.visible = burnerStudy;
+    state.burnerFill.visible = burnerStudy;
 
     const selectedGroup = state.components.get(selected);
     if (selectedGroup) {

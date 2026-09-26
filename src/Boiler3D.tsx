@@ -29,7 +29,8 @@ const explodeOffsets: Record<string, THREE.Vector3> = {
   'Burner & Ignition': new THREE.Vector3(-1.8, 0, 0),
   'Front Smokebox': new THREE.Vector3(-0.9, 0, 0),
   'Rear Smokebox': new THREE.Vector3(0.9, 0, 0),
-  'Stack / Flue Outlet': new THREE.Vector3(0.8, 0.8, 0),
+  'Economizer': new THREE.Vector3(0.9, 0.45, 0),
+  'Stack / Flue Outlet': new THREE.Vector3(0.9, 0.8, 0),
   'Safety Valve': new THREE.Vector3(0, 0.75, 0),
   'Steam Outlet': new THREE.Vector3(0.4, 0.6, 0),
   'Pressure Controls': new THREE.Vector3(-0.35, 0.5, 0),
@@ -379,21 +380,55 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addLabel(name, new THREE.Vector3(4.0, 2.35, 0));
     }
 
+    // ECONOMIZER
+    {
+      const name = 'Economizer';
+      const g = component(name);
+      const casing = box(1.45, 1.55, 2.25, material('#405762', 0.68, 0.42, 0.32));
+      casing.position.set(4.45, 2.05, 0);
+      tagMaterial(casing, 0.32, 'shell');
+      mark(casing, name);
+      g.add(casing);
+
+      for (let i = -2; i <= 2; i += 1) {
+        const tube = cylinderX(0.08, 1.15, material('#6ab7ce', 0.75, 0.3), 16);
+        tube.position.set(4.45, 1.65 + (i + 2) * 0.2, i * 0.32);
+        tagMaterial(tube, 1, 'internal');
+        mark(tube, name);
+        g.add(tube);
+      }
+
+      const feedIn = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1.0, 18), material('#56b9df', 0.72, 0.28));
+      feedIn.rotation.x = Math.PI / 2;
+      feedIn.position.set(4.45, 2.0, 1.55);
+      tagMaterial(feedIn, 1, 'utility');
+      mark(feedIn, name);
+      g.add(feedIn);
+
+      const duct = box(1.0, 0.55, 1.1, material('#475a63', 0.8, 0.36));
+      duct.position.set(3.85, 1.35, 0);
+      tagMaterial(duct, 1, 'utility');
+      mark(duct, name);
+      g.add(duct);
+
+      addLabel(name, new THREE.Vector3(4.55, 3.2, 1.0));
+    }
+
     // STACK
     {
       const name = 'Stack / Flue Outlet';
       const g = component(name);
       const riser = cylinderY(0.48, 2.6, material('#485b65', 0.8, 0.35), 28);
-      riser.position.set(3.05, 3.15, 0);
+      riser.position.set(4.45, 3.95, 0);
       tagMaterial(riser, 1, 'utility');
       mark(riser, name);
       g.add(riser);
       const base = box(1.05, 0.75, 1.2, material('#43545d', 0.8, 0.38));
-      base.position.set(3.05, 2.05, 0);
+      base.position.set(4.45, 2.95, 0);
       tagMaterial(base, 1, 'utility');
       mark(base, name);
       g.add(base);
-      addLabel(name, new THREE.Vector3(3.1, 4.7, 0));
+      addLabel(name, new THREE.Vector3(4.5, 5.45, 0));
     }
 
     // SAFETY VALVE

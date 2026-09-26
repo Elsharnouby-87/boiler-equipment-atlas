@@ -1863,11 +1863,21 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const targetPosition = base.clone().add(offset);
       group.userData.targetPosition = targetPosition;
 
-      const contextFactor = contextMode === 'full' || name === selected
+      let contextFactor = contextMode === 'full' || name === selected
         ? 1
         : contextMode === 'focus'
           ? 0.22
           : 0.035;
+
+      // Preserve the physical relationship around the burner throat while focusing.
+      if (contextMode === 'focus' && selected === 'Burner & Ignition') {
+        if (name === 'Front Smokebox') contextFactor = 0.58;
+        if (name === 'Furnace Tube') contextFactor = 0.44;
+      }
+      if (contextMode === 'focus' && selected === 'Front Smokebox') {
+        if (name === 'Burner & Ignition') contextFactor = 0.48;
+        if (name === 'Tube Sheets' || name === 'Furnace Tube') contextFactor = 0.38;
+      }
 
       group.traverse(obj => {
         if (!(obj instanceof THREE.Mesh)) return;
@@ -1918,7 +1928,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     if (selectedGroup) {
       const bounds = new THREE.Box3().setFromObject(selectedGroup);
       state.highlight.box.copy(bounds);
-      state.highlight.visible = !bounds.isEmpty();
+      state.highlight.visible = !state.mobileRender && !bounds.isEmpty();
       state.selectionGlow.position.copy(bounds.getCenter(new THREE.Vector3()));
       state.selectionGlow.visible = contextMode !== 'full' || selected !== 'Boiler Shell';
     } else {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, CircleAlert, Flame, Gauge, ShieldCheck, Waves } from 'lucide-react';
+import { ArrowLeft, CircleAlert, Flame, Gauge, ShieldCheck, Waves, X } from 'lucide-react';
 import Boiler3D from './Boiler3D';
 import GlobalNavigation, { type NavigationTarget } from './GlobalNavigation';
 import type { CameraCommand, ViewMode } from './modelTypes';
@@ -239,6 +239,7 @@ const scenarios: Scenario[] = [
 
 export default function TroubleshootingPage({ onBack, onNavigate }: Props) {
   const [index, setIndex] = useState(0);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [cameraCommand, setCameraCommand] = useState<CameraCommand>({ id: 1, action: 'fitComponent', component: scenarios[0].component });
   const scenario = scenarios[index];
 
@@ -301,6 +302,28 @@ export default function TroubleshootingPage({ onBack, onNavigate }: Props) {
             <span className="fuel"><Flame size={11} /> COMBUSTION</span>
             <span className="hot"><Gauge size={11} /> PROTECTION</span>
           </div>
+
+          <div className="study-mobile-actions operation-mobile-actions">
+            <button disabled={index === 0} onClick={() => choose(Math.max(0, index - 1))}>← Previous</button>
+            <button className="active danger" onClick={() => setMobileOpen(true)}>Diagnosis</button>
+            <button disabled={index === scenarios.length - 1} onClick={() => choose(Math.min(scenarios.length - 1, index + 1))}>Next →</button>
+          </div>
+
+          <section className={`study-mobile-sheet trouble-mobile-sheet ${mobileOpen ? 'open' : ''}`}>
+            <button className="study-mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close diagnostic details"><X size={18} /></button>
+            <span className="sheet-eyebrow">{scenario.severity}</span>
+            <h3>{scenario.title}</h3>
+            <p>{scenario.short}</p>
+            <span className="sheet-subhead">WHAT YOU MAY SEE</span>
+            <ul>{scenario.symptoms.map(item => <li key={item}>{item}</li>)}</ul>
+            <span className="sheet-subhead">LIKELY AREAS</span>
+            <ul>{scenario.likely.map(item => <li key={item}>{item}</li>)}</ul>
+            <span className="sheet-subhead">PROTECTION</span>
+            <ul>{scenario.protection.map(item => <li key={item}>{item}</li>)}</ul>
+            <span className="sheet-subhead">SAFE DIAGNOSTIC FOCUS</span>
+            <ul>{scenario.checks.map(item => <li key={item}>{item}</li>)}</ul>
+            <p className="sheet-note"><b>Boundary:</b> {scenario.sourceBoundary}</p>
+          </section>
         </div>
 
         <aside className="burner-tech">

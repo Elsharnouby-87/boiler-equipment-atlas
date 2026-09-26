@@ -45,6 +45,8 @@ type SceneState = {
   components: Map<string, THREE.Group>;
   labelGroup: THREE.Group;
   flowGroup: THREE.Group;
+  highlight: THREE.Box3Helper;
+  selectionGlow: THREE.PointLight;
   mobileRender: boolean;
 };
 
@@ -60,6 +62,27 @@ const explodeOffsets: Record<string, THREE.Vector3> = {
   'Level Gauge': new THREE.Vector3(0, 0, 0.7),
   'Feedwater Inlet': new THREE.Vector3(0.55, 0, 0.5),
   'Blowdown Valve': new THREE.Vector3(0, -0.75, 0),
+};
+
+const cameraHints: Record<string, Partial<Pick<CameraPreset, 'yaw' | 'pitch'>>> = {
+  'Burner & Ignition': { yaw: -Math.PI / 2, pitch: 0.06 },
+  'Front Smokebox': { yaw: -Math.PI / 2, pitch: 0.10 },
+  'Furnace Tube': { yaw: -0.82, pitch: 0.10 },
+  'Fire Tubes': { yaw: -0.72, pitch: 0.14 },
+  'Tube Sheets': { yaw: 1.22, pitch: 0.12 },
+  'Boiler Shell': { yaw: -0.72, pitch: 0.18 },
+  'Water Space': { yaw: -0.65, pitch: 0.12 },
+  'Steam Space': { yaw: -0.65, pitch: 0.30 },
+  'Level Gauge': { yaw: 0.05, pitch: 0.08 },
+  'Level Sensors': { yaw: 0.08, pitch: 0.38 },
+  'Pressure Controls': { yaw: -0.10, pitch: 0.40 },
+  'Safety Valve': { yaw: 0.18, pitch: 0.44 },
+  'Steam Outlet': { yaw: 0.40, pitch: 0.42 },
+  'Feedwater Inlet': { yaw: 0.16, pitch: 0.08 },
+  'Blowdown Valve': { yaw: 0.16, pitch: -0.16 },
+  'Rear Smokebox': { yaw: Math.PI / 2, pitch: 0.12 },
+  Economizer: { yaw: 1.08, pitch: 0.24 },
+  'Stack / Flue Outlet': { yaw: 1.05, pitch: 0.40 },
 };
 
 function material(
@@ -642,6 +665,18 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     }
     flowGroup.visible = false;
 
+    const highlight = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color('#ff9a3d'));
+    highlight.material.transparent = true;
+    highlight.material.opacity = mobileRender ? 0.22 : 0.32;
+    highlight.material.depthTest = false;
+    highlight.renderOrder = 60;
+    highlight.visible = false;
+    scene.add(highlight);
+
+    const selectionGlow = new THREE.PointLight('#ff8a32', mobileRender ? 0.45 : 0.8, mobileRender ? 5.5 : 7.5, 2);
+    selectionGlow.visible = false;
+    scene.add(selectionGlow);
+
     const presetForObject = (object: THREE.Object3D, multiplier = 1.65): CameraPreset | null => {
       const bounds = new THREE.Box3().setFromObject(object);
       if (bounds.isEmpty()) return null;
@@ -850,7 +885,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     };
     animate();
 
-    stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, mobileRender };
+    renderer.compile(scene, camera);
+    stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, highlight, selectionGlow, mobileRender };
     fitObject(root, mobileRender ? 1.62 : 1.4, 0);
 
     return () => {
@@ -934,6 +970,18 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         label.material.opacity = componentName === selected ? 1 : contextMode === 'full' ? 0.82 : 0.34;
       }
     });
+
+    const selectedGroup = state.components.get(selected);
+    if (selectedGroup) {
+      const bounds = new THREE.Box3().setFromObject(selectedGroup);
+      state.highlight.box.copy(bounds);
+      state.highlight.visible = !bounds.isEmpty();
+      state.selectionGlow.position.copy(bounds.getCenter(new THREE.Vector3()));
+      state.selectionGlow.visible = contextMode !== 'full' || selected !== 'Boiler Shell';
+    } else {
+      state.highlight.visible = false;
+      state.selectionGlow.visible = false;
+    }
   }, [mode, selected, labels, flow, explode, contextMode]);
 
   useEffect(() => {
@@ -958,9 +1006,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const preset = presetFor(state.root, state.mobileRender ? 1.62 : 1.4);
       if (preset) state.transitionCamera({ ...preset, yaw: -0.76, pitch: 0.18 }, 760);
     } else if (cameraCommand.action === 'fitComponent') {
-      const object = state.components.get(cameraCommand.component ?? selectedRef.current);
+      const componentName = cameraCommand.component ?? selectedRef.current;
+      const object = state.components.get(componentName);
       const preset = object ? presetFor(object, state.mobileRender ? 2.55 : 2.25) : null;
-      if (preset) state.transitionCamera(preset, 650);
+      if (preset) {
+        const hint = cameraHints[componentName];
+        state.transitionCamera({ ...preset, ...hint }, 650);
+      }
     } else if (cameraCommand.action === 'zoomIn') {
       state.transitionCamera({
         yaw: state.orbit.yaw,

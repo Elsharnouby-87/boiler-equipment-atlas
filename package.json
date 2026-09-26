@@ -1,5 +1,5 @@
 {
-  "name": "vite-react-app",
+  "name": "boiler-equipment-atlas",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -27,5 +27,6 @@
     "tailwindcss": "^3.4.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
-  }
+  },
+  "description": "Interactive 3D industrial steam boiler training atlas"
 }

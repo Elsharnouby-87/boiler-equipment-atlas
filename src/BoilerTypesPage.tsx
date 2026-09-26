@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Flame, Gauge, Waves } from 'lucide-react';
+import { ArrowLeft, Flame, Gauge, Waves, X } from 'lucide-react';
 import BoilerTypes3D, { type BoilerTypeVariant } from './BoilerTypes3D';
 import GlobalNavigation, { type NavigationTarget } from './GlobalNavigation';
 
@@ -60,6 +60,7 @@ const typeData: Record<BoilerTypeVariant, {
 
 export default function BoilerTypesPage({ onBack, onNavigate }: Props) {
   const [variant, setVariant] = useState<BoilerTypeVariant>('fireTube');
+  const [mobileOpen, setMobileOpen] = useState(false);
   const data = typeData[variant];
 
   return (
@@ -119,6 +120,24 @@ export default function BoilerTypesPage({ onBack, onNavigate }: Props) {
             <span className="process"><Waves size={11} /> WATER / STEAM</span>
             <span className="heat"><Flame size={11} /> HOT GAS</span>
           </div>
+
+          <div className="study-mobile-actions operation-mobile-actions">
+            <button className={variant === 'fireTube' ? 'active' : ''} onClick={() => setVariant('fireTube')}>Fire-Tube</button>
+            <button onClick={() => setMobileOpen(true)}>Type Details</button>
+            <button className={variant === 'waterTube' ? 'active' : ''} onClick={() => setVariant('waterTube')}>Water-Tube</button>
+          </div>
+
+          <section className={`study-mobile-sheet ${mobileOpen ? 'open' : ''}`}>
+            <button className="study-mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close boiler type details"><X size={18} /></button>
+            <span className="sheet-eyebrow">BOILER TYPE STUDY</span>
+            <h3>{data.title}</h3>
+            <p>{data.principle}</p>
+            <span className="sheet-subhead">CORE CONSTRUCTION</span>
+            <ul>{data.construction.map(item => <li key={item}>{item}</li>)}</ul>
+            <span className="sheet-subhead">OPERATING CHARACTER</span>
+            <ul>{data.operatingCharacter.map(item => <li key={item}>{item}</li>)}</ul>
+            <p className="sheet-note">{data.sourceNote}</p>
+          </section>
         </div>
 
         <aside className="radiant-tech">

@@ -50,6 +50,7 @@ type SceneState = {
   selectionGlow: THREE.PointLight;
   burnerKey: THREE.PointLight;
   burnerFill: THREE.PointLight;
+  burnerRim: THREE.PointLight;
   mobileRender: boolean;
 };
 
@@ -198,6 +199,39 @@ function makeDetailLabel(text: string) {
   sprite.renderOrder = 24;
   sprite.userData.labelTexture = texture;
   sprite.userData.detailLabel = true;
+  return sprite;
+}
+
+function makeAirDetailLabel(text: string) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 420;
+  canvas.height = 76;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(5,35,50,.90)';
+  ctx.strokeStyle = 'rgba(92,220,255,.96)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(4, 4, 412, 68, 12);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = '700 22px Inter, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e9fbff';
+  ctx.fillText(text, 210, 39);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+  }));
+  sprite.scale.set(1.62, 0.30, 1);
+  sprite.renderOrder = 25;
+  sprite.userData.labelTexture = texture;
+  sprite.userData.detailLabel = true;
+  sprite.userData.airSystemLabel = true;
   return sprite;
 }
 
@@ -356,6 +390,11 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     burnerFill.visible = false;
     scene.add(burnerFill);
 
+    const burnerRim = new THREE.PointLight('#68ddff', mobileRender ? 0.95 : 1.35, 5.4, 2);
+    burnerRim.position.set(-5.80, 0.15, -1.15);
+    burnerRim.visible = false;
+    scene.add(burnerRim);
+
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(12.8, mobileRender ? 40 : 72),
       new THREE.MeshStandardMaterial({ color: '#17313e', map: concreteTex, metalness: 0.08, roughness: 0.82 }),
@@ -432,6 +471,17 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       s.userData.baseLabelScale = s.scale.clone();
       s.userData.component = componentName;
       labelGroup.add(s);
+      return s;
+    };
+
+    const addAirDetailLabel = (text: string, componentName: string, pos: THREE.Vector3) => {
+      const s = makeAirDetailLabel(text);
+      s.position.copy(pos);
+      s.scale.set(mobileRender ? 1.00 : 1.22, mobileRender ? 0.19 : 0.225, 1);
+      s.userData.baseLabelScale = s.scale.clone();
+      s.userData.component = componentName;
+      labelGroup.add(s);
+      return s;
     };
 
     const fireTubeCoords: [number, number][] = [];
@@ -1539,13 +1589,34 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         'FLAME SCANNER',
         name,
         mobileRender
-          ? new THREE.Vector3(-4.18, 0.78, 0.94)
-          : new THREE.Vector3(-5.02, 0.78, 0.94),
+          ? new THREE.Vector3(-4.18, 0.82, 0.94)
+          : new THREE.Vector3(-4.82, 0.92, 1.02),
       );
-      addDetailLabel('AIR REGISTER', name, new THREE.Vector3(-4.25, 0.30, -1.02));
-      addDetailLabel('PILOT BURNER', name, new THREE.Vector3(-3.46, -0.10, 1.05));
-      addDetailLabel('IGNITION ELECTRODE', name, new THREE.Vector3(-4.36, -0.58, -1.05));
-      addDetailLabel('MAIN FUEL NOZZLE', name, new THREE.Vector3(-3.48, -1.52, -0.60));
+      addAirDetailLabel(
+        'DRIVE MOTOR',
+        name,
+        mobileRender
+          ? new THREE.Vector3(-5.82, 0.44, 0.82)
+          : new THREE.Vector3(-6.62, 0.62, 0.92),
+      );
+      addAirDetailLabel(
+        'COMBUSTION AIR BLOWER',
+        name,
+        mobileRender
+          ? new THREE.Vector3(-5.18, 0.22, -0.88)
+          : new THREE.Vector3(-5.72, 0.62, -0.92),
+      );
+      addAirDetailLabel(
+        'BLOWER DISCHARGE',
+        name,
+        mobileRender
+          ? new THREE.Vector3(-4.72, -0.16, -0.96)
+          : new THREE.Vector3(-5.08, -0.08, -1.10),
+      );
+      addAirDetailLabel('AIR REGISTER', name, new THREE.Vector3(-4.22, 0.28, -1.02));
+      addDetailLabel('PILOT BURNER', name, new THREE.Vector3(-3.46, -0.02, 1.08));
+      addDetailLabel('IGNITION ELECTRODE', name, new THREE.Vector3(-4.28, -0.62, -1.04));
+      addDetailLabel('MAIN FUEL NOZZLE', name, new THREE.Vector3(-3.46, -1.50, -0.58));
     }
 
     // REAR SMOKEBOX
@@ -2131,7 +2202,27 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       p.userData.flowType = 'water';
       flowGroup.add(p);
     }
-    const burnerAirCount = mobileRender ? 7 : 12;
+    const burnerAirCurve = new THREE.CatmullRomCurve3([
+      // Ambient approach to the axial inlet eye.
+      new THREE.Vector3(-5.02, 0.28, 1.22),
+      new THREE.Vector3(-5.30, 0.10, 0.90),
+      new THREE.Vector3(-5.50, -0.08, 0.64),
+      new THREE.Vector3(-5.54, -0.15, 0.54),
+      // Impeller / volute sweep toward the tangential discharge.
+      new THREE.Vector3(-5.66, -0.10, 0.42),
+      new THREE.Vector3(-5.73, 0.02, 0.25),
+      new THREE.Vector3(-5.58, 0.10, 0.12),
+      new THREE.Vector3(-5.32, 0.06, 0.09),
+      // Transition duct -> windbox -> register -> burner throat.
+      new THREE.Vector3(-5.10, -0.12, 0.09),
+      new THREE.Vector3(-5.03, -0.42, 0.08),
+      new THREE.Vector3(-4.96, -0.70, 0.05),
+      new THREE.Vector3(-4.65, -0.82, 0.03),
+      new THREE.Vector3(-4.28, -0.82, 0.01),
+      new THREE.Vector3(-3.92, -0.82, 0.00),
+    ], false, 'centripetal', 0.28);
+
+    const burnerAirCount = mobileRender ? 11 : 18;
     for (let i = 0; i < burnerAirCount; i += 1) {
       const p = new THREE.Mesh(burnerFlowGeometry, burnerAirMat);
       p.userData.phase = i / burnerAirCount;
@@ -2455,22 +2546,19 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
             const u = (phase + t * 0.07) % 1;
             child.position.set(-2.8 + Math.sin((phase + t * 0.03) * 5) * 2.3, -1.7 + u * 3.3, 1.55 + Math.cos(phase * 10) * 0.28);
           } else if (flowType === 'burnerAir') {
-            const u = (phase + t * 0.18) % 1;
-            if (u < 0.45) {
-              const q = u / 0.45;
-              child.position.set(
-                THREE.MathUtils.lerp(-6.42, -5.48, q),
-                THREE.MathUtils.lerp(-0.10, -0.73, q),
-                THREE.MathUtils.lerp(0.52, 0.17, q),
-              );
-            } else {
-              const q = (u - 0.45) / 0.55;
-              child.position.set(
-                THREE.MathUtils.lerp(-5.48, -4.12, q),
-                -0.82 + Math.sin((q + phase) * Math.PI * 2) * 0.07,
-                THREE.MathUtils.lerp(0.17, 0.02, q),
-              );
-            }
+            const u = (phase + t * 0.135) % 1;
+            const point = burnerAirCurve.getPointAt(u);
+            child.position.copy(point);
+
+            // Give the air stream a subtle coherent corkscrew as it passes the
+            // impeller/volute and then straighten it through the register.
+            const swirl = u > 0.18 && u < 0.58 ? 1 : u >= 0.58 ? 0.28 : 0.45;
+            child.position.y += Math.sin((u * 12 + phase) * Math.PI * 2) * 0.030 * swirl;
+            child.position.z += Math.cos((u * 12 + phase) * Math.PI * 2) * 0.038 * swirl;
+
+            const airMesh = child as THREE.Mesh;
+            const pulse = 0.88 + 0.24 * Math.sin((u * 8 + phase) * Math.PI * 2);
+            airMesh.scale.setScalar(pulse);
           } else if (flowType === 'burnerFuel') {
             const u = (phase + t * 0.15) % 1;
             const pilot = child.userData.fuelPath === 'pilot';
@@ -2490,7 +2578,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     animate();
 
     renderer.compile(scene, camera);
-    stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, highlight, selectionGlow, burnerKey, burnerFill, mobileRender };
+    stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, highlight, selectionGlow, burnerKey, burnerFill, burnerRim, mobileRender };
     fitObject(root, mobileRender ? 1.62 : 1.4, 0);
 
     return () => {
@@ -2650,6 +2738,17 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const burnerStudy = selected === 'Burner & Ignition' || selected === 'Front Smokebox';
     state.burnerKey.visible = burnerStudy;
     state.burnerFill.visible = burnerStudy;
+    state.burnerRim.visible = burnerStudy;
+
+    // Presentation lighting: cool definition on the blower/motor and a warm
+    // lift toward the flame, with a stronger cyan cue when combustion-air flow is shown.
+    if (burnerStudy) {
+      state.burnerKey.intensity = state.mobileRender ? 2.55 : 3.25;
+      state.burnerFill.intensity = state.mobileRender ? 1.15 : 1.65;
+      state.burnerRim.intensity = burnerFlowMode
+        ? (state.mobileRender ? 1.25 : 1.75)
+        : (state.mobileRender ? 0.90 : 1.30);
+    }
 
     const selectedGroup = state.components.get(selected);
     if (selectedGroup) {
@@ -2658,6 +2757,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       // Keep the helper available for debugging, but do not show bounding boxes in learning views.
       state.highlight.visible = false;
       state.selectionGlow.position.copy(bounds.getCenter(new THREE.Vector3()));
+      if (selected === 'Burner & Ignition') {
+        state.selectionGlow.color.set('#67dcff');
+        state.selectionGlow.intensity = state.mobileRender ? 0.50 : 0.78;
+      } else {
+        state.selectionGlow.color.set('#ff8a32');
+        state.selectionGlow.intensity = state.mobileRender ? 0.45 : 0.80;
+      }
       state.selectionGlow.visible = contextMode !== 'full' || selected !== 'Boiler Shell';
     } else {
       state.highlight.visible = false;
@@ -2693,9 +2799,9 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         const mobileLandscape = state.mobileRender && canvasAspect > 1.45;
         const burnerPreset: CameraPreset = state.mobileRender
           ? mobileLandscape
-            ? { yaw: -0.28, pitch: 0.075, radius: 7.25, target: [-3.05, -0.72, 0.03] }
-            : { yaw: -0.28, pitch: 0.095, radius: 11.15, target: [-3.05, -0.72, 0.03] }
-          : { yaw: -0.28, pitch: 0.085, radius: 8.55, target: [-3.15, -0.72, 0.03] };
+            ? { yaw: -0.50, pitch: 0.085, radius: 7.55, target: [-3.42, -0.62, 0.02] }
+            : { yaw: -0.44, pitch: 0.105, radius: 11.35, target: [-3.38, -0.62, 0.02] }
+          : { yaw: -0.52, pitch: 0.095, radius: 8.95, target: [-3.48, -0.62, 0.02] };
         state.transitionCamera(burnerPreset, 820);
       } else {
         const object = state.components.get(componentName);

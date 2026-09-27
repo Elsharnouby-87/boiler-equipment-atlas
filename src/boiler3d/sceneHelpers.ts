@@ -163,6 +163,42 @@ export function makeFlameMaterial(
   });
 }
 
+export function makeBlowerVoluteGeometry(
+  depth = 0.34,
+  mobile = false,
+) {
+  // Schematic industrial centrifugal-fan scroll casing.
+  // The 2D profile is drawn in the local XY plane and extruded along +Z.
+  // Boiler3D rotates the geometry so the extrusion axis becomes the fan shaft axis.
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.46, -0.30);
+  shape.bezierCurveTo(-0.62, -0.10, -0.61, 0.22, -0.46, 0.43);
+  shape.bezierCurveTo(-0.26, 0.66, 0.10, 0.72, 0.39, 0.56);
+  shape.bezierCurveTo(0.62, 0.43, 0.73, 0.18, 0.70, -0.08);
+  shape.bezierCurveTo(0.68, -0.27, 0.59, -0.41, 0.44, -0.51);
+  shape.lineTo(0.44, -0.68);
+  shape.lineTo(0.08, -0.68);
+  shape.bezierCurveTo(-0.10, -0.60, -0.33, -0.50, -0.46, -0.30);
+  shape.closePath();
+
+  const inlet = new THREE.Path();
+  inlet.absarc(0.03, 0.05, 0.275, 0, Math.PI * 2, false);
+  shape.holes.push(inlet);
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSegments: mobile ? 1 : 2,
+    bevelSize: 0.035,
+    bevelThickness: 0.028,
+    curveSegments: mobile ? 10 : 18,
+    steps: 1,
+  });
+  geometry.center();
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 export function cylinderBetween(
   a: THREE.Vector3,
   b: THREE.Vector3,

@@ -442,6 +442,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       });
     });
 
+    // The master model is a schematic three-pass fire-tube arrangement.
+    // Pass 1 is the furnace.  The lower fire-tube bank returns gas to the
+    // front (Pass 2), while the upper bank carries gas back to the rear
+    // (Pass 3) before the economizer and stack.
+    const pass2TubeCoords = fireTubeCoords.filter(([y]) => y <= 0);
+    const pass3TubeCoords = fireTubeCoords.filter(([y]) => y > 0);
+
     // BOILER SHELL
     {
       const name = 'Boiler Shell';
@@ -593,21 +600,37 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(inner, name);
       g.add(inner);
       addLabel(name, new THREE.Vector3(0.2, -0.85, 1.2));
+      addDetailLabel('PASS 1 · FRONT → REAR', name, new THREE.Vector3(0.15, -1.56, 1.42));
     }
 
-    // FIRE TUBES
+    // FIRE TUBES — explicit 2nd and 3rd gas passes
     {
       const name = 'Fire Tubes';
       const g = component(name);
-      const tubeMat = material('#7f6e58', 0.88, 0.30, 1, undefined, darkSteelTex);
-      fireTubeCoords.forEach(([y, z]) => {
-        const t = cylinderX(0.105, 6.72, tubeMat, mobileRender ? 10 : 16);
+      const pass2Mat = material('#9b6f4d', 0.84, 0.30, 1, '#5e2110', darkSteelTex);
+      const pass3Mat = material('#6f8790', 0.86, 0.29, 1, '#17394a', darkSteelTex);
+
+      pass2TubeCoords.forEach(([y, z]) => {
+        const t = cylinderX(0.105, 6.72, pass2Mat, mobileRender ? 10 : 16);
         t.position.set(0, y + 0.18, z);
+        t.userData.gasPass = 2;
         tagMaterial(t, 1, 'internal');
         mark(t, name);
         g.add(t);
       });
+
+      pass3TubeCoords.forEach(([y, z]) => {
+        const t = cylinderX(0.105, 6.72, pass3Mat, mobileRender ? 10 : 16);
+        t.position.set(0, y + 0.18, z);
+        t.userData.gasPass = 3;
+        tagMaterial(t, 1, 'internal');
+        mark(t, name);
+        g.add(t);
+      });
+
       addLabel(name, new THREE.Vector3(0.2, 0.55, -2.15));
+      addDetailLabel('PASS 2 · REAR → FRONT', name, new THREE.Vector3(0.10, -0.05, -2.16));
+      addDetailLabel('PASS 3 · FRONT → REAR', name, new THREE.Vector3(0.10, 1.34, -2.16));
     }
 
     // TUBE SHEETS
@@ -615,7 +638,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const name = 'Tube Sheets';
       const g = component(name);
       const sheetMat = material('#748188', 0.88, 0.29, 1, undefined, stainlessTex);
-      const endRimMat = material('#a38e72', 0.82, 0.25, 1, undefined, stainlessTex);
+      const pass2RimMat = material('#c18a5f', 0.80, 0.24, 1, undefined, stainlessTex);
+      const pass3RimMat = material('#86a3ad', 0.82, 0.24, 1, undefined, stainlessTex);
       const tubeEndGeometry = new THREE.TorusGeometry(0.118, 0.016, 7, mobileRender ? 12 : 18);
 
       [-3.46, 3.46].forEach(x => {
@@ -626,9 +650,10 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         g.add(sheet);
 
         fireTubeCoords.forEach(([y,z]) => {
-          const rim = new THREE.Mesh(tubeEndGeometry, endRimMat);
+          const rim = new THREE.Mesh(tubeEndGeometry, y <= 0 ? pass2RimMat : pass3RimMat);
           rim.rotation.y = Math.PI / 2;
           rim.position.set(x + (x < 0 ? -0.09 : 0.09), y + 0.18, z);
+          rim.userData.gasPass = y <= 0 ? 2 : 3;
           tagMaterial(rim, 1, 'internal');
           mark(rim, name);
           g.add(rim);
@@ -679,6 +704,20 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       tagMaterial(latchBar, 1, 'utility');
       mark(latchBar, name);
       g.add(latchBar);
+
+      // Schematic front turnaround divider: Pass 2 gas arrives in the lower
+      // chamber, turns around the divider and enters the upper Pass 3 bank.
+      const frontTurnaroundPlate = box(0.30, 0.10, 2.95, material('#8b969b', 0.82, 0.32, 1, undefined, stainlessTex));
+      frontTurnaroundPlate.position.set(-3.78, 0.64, 0.18);
+      tagMaterial(frontTurnaroundPlate, 1, 'utility');
+      mark(frontTurnaroundPlate, name);
+      g.add(frontTurnaroundPlate);
+
+      const frontGuide = box(0.30, 1.20, 0.10, material('#6c7d84', 0.78, 0.36, 1, undefined, darkSteelTex));
+      frontGuide.position.set(-3.78, 1.18, -1.28);
+      tagMaterial(frontGuide, 1, 'utility');
+      mark(frontGuide, name);
+      g.add(frontGuide);
 
       // Burner mounting flange and refractory throat / quarl.
       addFlangeX(g, -4.34, -0.82, 0, 0.76, 0.45, 0.12, trimMat, name);
@@ -1300,7 +1339,22 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         g.add(hinge);
       });
 
+      // Rear chamber performs two jobs in the schematic three-pass model:
+      // it turns furnace gas into Pass 2 and later collects Pass 3 for exit.
+      const rearTurnaroundPlate = box(0.30, 0.10, 3.00, material('#8b969b', 0.82, 0.32, 1, undefined, stainlessTex));
+      rearTurnaroundPlate.position.set(3.78, 0.62, -0.10);
+      tagMaterial(rearTurnaroundPlate, 1, 'utility');
+      mark(rearTurnaroundPlate, name);
+      g.add(rearTurnaroundPlate);
+
+      const rearOutletGuide = box(0.32, 1.18, 0.10, material('#6c7d84', 0.78, 0.36, 1, undefined, darkSteelTex));
+      rearOutletGuide.position.set(3.80, 1.22, 1.26);
+      tagMaterial(rearOutletGuide, 1, 'utility');
+      mark(rearOutletGuide, name);
+      g.add(rearOutletGuide);
+
       addLabel(name, new THREE.Vector3(4.15, 2.45, 0));
+      addDetailLabel('1→2 TURNAROUND / 3→OUTLET', name, new THREE.Vector3(4.10, 1.10, -1.65));
     }
 
     // ECONOMIZER
@@ -1772,8 +1826,12 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addLabel(name, new THREE.Vector3(-0.15, 3.55, 1.15));
     }
 
-    // Flow particles: generic boiler flow plus a dedicated burner learning overlay.
-    const hotMat = material('#ff8c38', 0.0, 0.2, 0.85, '#ff4e13');
+    // Flow particles: explicit three-pass flue-gas path plus boiler water and
+    // a dedicated burner learning overlay.
+    const hotMat = material('#ff8c38', 0.0, 0.2, 0.90, '#ff4e13');
+    const pass2GasMat = material('#ffb15c', 0.0, 0.22, 0.86, '#d95b1a');
+    const pass3GasMat = material('#ffd184', 0.0, 0.25, 0.82, '#b86f2a');
+    const outletGasMat = material('#ffe5b3', 0.0, 0.28, 0.76, '#9f7445');
     const blueMat = material('#53c8f5', 0.0, 0.2, 0.72, '#1aa6e1');
     const burnerAirMat = new THREE.MeshBasicMaterial({
       color: '#66dcff',
@@ -1792,7 +1850,30 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const hotGeometry = new THREE.SphereGeometry(0.055, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
     const waterGeometry = new THREE.SphereGeometry(0.05, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
     const burnerFlowGeometry = new THREE.SphereGeometry(mobileRender ? 0.060 : 0.078, mobileRender ? 5 : 8, mobileRender ? 5 : 8);
-    const hotCount = mobileRender ? 14 : 24;
+    const gasPassCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-3.42, -0.82, 0.00),
+      new THREE.Vector3(-1.20, -0.82, 0.00),
+      new THREE.Vector3(1.55, -0.82, 0.00),
+      new THREE.Vector3(3.34, -0.82, 0.00),
+      new THREE.Vector3(3.70, -0.35, 0.15),
+      new THREE.Vector3(3.35, 0.10, 0.55),
+      new THREE.Vector3(1.10, 0.05, 0.55),
+      new THREE.Vector3(-1.40, 0.05, 0.55),
+      new THREE.Vector3(-3.36, 0.05, 0.55),
+      new THREE.Vector3(-3.72, 0.62, 0.25),
+      new THREE.Vector3(-3.34, 1.22, -0.48),
+      new THREE.Vector3(-1.10, 1.22, -0.48),
+      new THREE.Vector3(1.45, 1.22, -0.48),
+      new THREE.Vector3(3.40, 1.22, -0.48),
+      new THREE.Vector3(4.12, 1.46, -0.18),
+      new THREE.Vector3(4.55, 2.05, 0.00),
+      new THREE.Vector3(4.78, 2.72, 0.00),
+      new THREE.Vector3(4.78, 3.55, 0.00),
+      new THREE.Vector3(4.78, 4.75, 0.00),
+      new THREE.Vector3(4.78, 6.00, 0.00),
+    ], false, 'centripetal', 0.35);
+
+    const hotCount = mobileRender ? 18 : 30;
     const waterCount = mobileRender ? 10 : 16;
     for (let i = 0; i < hotCount; i += 1) {
       const p = new THREE.Mesh(hotGeometry, hotMat);
@@ -2115,8 +2196,17 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           const phase = (child.userData.phase as number) ?? 0;
           const flowType = child.userData.flowType as string | undefined;
           if (flowType === 'gas') {
-            const u = (phase + t * 0.12) % 1;
-            child.position.set(-3.25 + u * 6.5, -0.82 + Math.sin((u + phase) * Math.PI * 2) * 0.08, Math.sin((u * 4 + phase) * Math.PI) * 0.28);
+            const u = (phase + t * 0.055) % 1;
+            const point = gasPassCurve.getPointAt(u);
+            child.position.copy(point);
+            child.position.y += Math.sin((u * 10 + phase) * Math.PI * 2) * 0.035;
+            child.position.z += Math.cos((u * 8 + phase) * Math.PI * 2) * 0.045;
+
+            const gasMesh = child as THREE.Mesh;
+            if (u < 0.23) gasMesh.material = hotMat;
+            else if (u < 0.50) gasMesh.material = pass2GasMat;
+            else if (u < 0.77) gasMesh.material = pass3GasMat;
+            else gasMesh.material = outletGasMat;
           } else if (flowType === 'water') {
             const u = (phase + t * 0.07) % 1;
             child.position.set(-2.8 + Math.sin((phase + t * 0.03) * 5) * 2.3, -1.7 + u * 3.3, 1.55 + Math.cos(phase * 10) * 0.28);

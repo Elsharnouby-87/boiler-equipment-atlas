@@ -2283,12 +2283,36 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     state.labelGroup.visible = labels;
     state.flowGroup.visible = flow;
+
     const burnerFlowMode = flow && selected === 'Burner & Ignition';
+    const combustionFlowComponents = new Set([
+      'Furnace Tube',
+      'Fire Tubes',
+      'Front Smokebox',
+      'Rear Smokebox',
+      'Economizer',
+      'Stack / Flue Outlet',
+    ]);
+    const waterFlowComponents = new Set([
+      'Water Space',
+      'Steam Space',
+      'Feedwater Inlet',
+      'Steam Outlet',
+      'Level Gauge',
+      'Level Sensors',
+    ]);
+    const combustionFlowMode = flow && combustionFlowComponents.has(selected);
+    const waterFlowMode = flow && waterFlowComponents.has(selected);
+
     state.flowGroup.children.forEach(child => {
       const flowType = child.userData.flowType as string | undefined;
       child.visible = burnerFlowMode
         ? flowType === 'burnerAir' || flowType === 'burnerFuel'
-        : flowType === 'gas' || flowType === 'water';
+        : combustionFlowMode
+          ? flowType === 'gas'
+          : waterFlowMode
+            ? flowType === 'water'
+            : flowType === 'gas' || flowType === 'water';
     });
 
     state.components.forEach((group, name) => {

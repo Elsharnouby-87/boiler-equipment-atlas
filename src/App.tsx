@@ -83,9 +83,9 @@ const details: Record<string, Detail> = {
   'Fire Tubes': {
     group: 'Combustion & Gas Path',
     location: 'Tube bundle running through the water-filled boiler shell.',
-    summary: 'Multiple gas tubes surrounded by boiler water.',
-    function: 'Carry hot combustion gases through the water inventory so heat transfers from the gas side into the water.',
-    why: 'Tube condition and cleanliness strongly affect heat transfer and boiler efficiency.',
+    summary: 'Two distinct fire-tube banks forming the second and third gas passes of the schematic three-pass boiler.',
+    function: 'Pass 2 carries combustion gas from the rear turnaround chamber back toward the front smokebox; Pass 3 then carries it from the front turnaround chamber back to the rear before the economizer and stack.',
+    why: 'Separating the second and third passes makes the real gas-flow direction visible and helps explain why tube cleanliness, pass restriction and turnaround-chamber condition affect heat transfer and draft.',
     observe: ['Gas-side fouling', 'Restricted gas path', 'Leak indications', 'Abnormal stack temperature trend'],
     issues: ['Soot/fouling', 'Scale-related poor heat transfer on the water side', 'Tube leakage', 'Blockage'],
     inspection: ['Tube cleanliness', 'Tube ends', 'Accessible tube surfaces', 'Leakage evidence'],
@@ -193,8 +193,8 @@ const details: Record<string, Detail> = {
   'Front Smokebox': {
     group: 'Combustion & Gas Path',
     location: 'Front end of the boiler around the burner-side gas transition.',
-    summary: 'Front gas-side enclosure around the fire-tube/furnace ends in the training model.',
-    function: 'Provides a contained gas-side transition and maintenance access to the front of the tube system.',
+    summary: 'Front gas-side enclosure and turnaround chamber for the three-pass training model.',
+    function: 'Receives gas returning through Pass 2, turns it into the upper Pass 3 tube bank, and provides maintenance access to the front tube ends.',
     why: 'Gas leakage, soot buildup or poor sealing can degrade combustion-side performance and maintenance safety.',
     observe: ['Gas leakage', 'Soot deposits', 'Door/seal condition', 'External hot spots'],
     issues: ['Soot accumulation', 'Seal leakage', 'Door damage'],
@@ -204,8 +204,8 @@ const details: Record<string, Detail> = {
   'Rear Smokebox': {
     group: 'Combustion & Gas Path',
     location: 'Rear end of the fire-tube boiler.',
-    summary: 'Rear gas-side collection/turning space in the training model.',
-    function: 'Collects combustion gas leaving the tube passes and directs it toward the flue outlet.',
+    summary: 'Rear gas-side turnaround and collection chamber in the three-pass training model.',
+    function: 'Receives Pass 1 gas from the furnace and turns it into Pass 2; later it collects gas leaving Pass 3 and directs it to the economizer and flue outlet.',
     why: 'Its cleanliness and sealing influence gas-flow resistance and heat-transfer performance.',
     observe: ['Soot buildup', 'Leakage', 'Abnormal hot spots', 'Restricted gas path'],
     issues: ['Fouling', 'Seal leakage', 'Flow restriction'],
@@ -380,7 +380,7 @@ export default function App() {
       </header>
 
       <section className="atlas-contextbar">
-        <div><span>INTERACTIVE 3D REFERENCE</span><strong>Industrial Steam Boiler · Fire-Tube Master Model</strong></div>
+        <div><span>INTERACTIVE 3D REFERENCE</span><strong>Industrial Steam Boiler · 3-Pass Fire-Tube Master Model</strong></div>
         <p>Training visualization · Schematic geometry · Follow site/OEM procedures</p>
       </section>
 

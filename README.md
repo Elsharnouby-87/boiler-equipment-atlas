@@ -16,7 +16,7 @@ This project is the boiler-focused companion to **Process Equipment Atlas**. It 
 
 ## 3D master model
 
-The main Atlas uses a schematic horizontal fire-tube boiler so the learner can inspect:
+The main Atlas uses a schematic horizontal **three-pass fire-tube boiler** so the learner can inspect the complete gas route: burner → furnace (Pass 1) → rear turnaround → Pass 2 fire-tube bank → front turnaround → Pass 3 fire-tube bank → rear collection → economizer → stack.
 
 - Boiler shell / pressure boundary
 - Burner and ignition

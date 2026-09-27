@@ -876,65 +876,75 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       // volute -> tangential discharge -> windbox / air register.
       // -------------------------------------------------------------------
       const motorMat = material('#344750', 0.76, 0.36, 1, undefined, darkSteelTex);
-      const motorEdgeMat = material('#5f747d', 0.82, 0.28, 1, undefined, paintedSteelTex);
-      const blowerMat = material('#48636f', 0.76, 0.31, 1, undefined, paintedSteelTex);
-      const blowerEdgeMat = material('#82969f', 0.84, 0.24, 1, undefined, stainlessTex);
-      const couplingGuardMat = material('#425862', 0.74, 0.38, 0.96, undefined, darkSteelTex);
+      const motorEdgeMat = material('#607782', 0.82, 0.27, 1, undefined, paintedSteelTex);
+      const blowerMat = material('#55737f', 0.74, 0.30, 1, undefined, paintedSteelTex);
+      const blowerEdgeMat = material('#91a7af', 0.84, 0.23, 1, undefined, stainlessTex);
+      const couplingGuardMat = material('#425862', 0.74, 0.38, 0.94, undefined, darkSteelTex);
+      const blowerX = -5.74;
+      const blowerY = -0.17;
+      const blowerZ = 0.52;
+      const motorX = -6.63;
+      const motorY = -0.12;
+      const motorZ = 0.52;
 
-      // Air plenum / windbox feed.  Kept compact so the blower remains
-      // readable without hiding the burner throat and flame.
-      const airPlenum = box(0.86, 0.92, 1.00, darkMat);
-      airPlenum.position.set(-5.43, -0.82, 0.14);
+      // Compact downstream plenum.  It is deliberately smaller than the fan
+      // so the air path reads as: scroll casing -> tangential discharge ->
+      // transition -> windbox instead of one large anonymous black block.
+      const airPlenum = box(0.58, 0.68, 0.76, darkMat);
+      airPlenum.position.set(-5.11, -0.57, 0.10);
       tagMaterial(airPlenum, 1, 'utility');
       mark(airPlenum, name);
       g.add(airPlenum);
 
-      const airDuct = box(0.62, 0.64, 0.72, paintedMat);
-      airDuct.position.set(-5.02, -0.82, 0.08);
+      const airDuct = box(0.44, 0.56, 0.66, paintedMat);
+      airDuct.position.set(-4.82, -0.75, 0.07);
+      airDuct.rotation.z = -0.10;
       tagMaterial(airDuct, 1, 'utility');
       mark(airDuct, name);
       g.add(airDuct);
 
-      // Centrifugal fan scroll / volute casing.
-      const blowerCenter = new THREE.Vector3(-5.72, -0.08, 0.52);
+      // Centrifugal scroll casing.  The new profile is intentionally
+      // asymmetric with an obvious discharge tongue, so it reads as a volute
+      // from both oblique and side views instead of a thick circular plate.
       const blowerScroll = new THREE.Mesh(
-        makeBlowerVoluteGeometry(mobileRender ? 0.30 : 0.34, mobileRender),
+        makeBlowerVoluteGeometry(mobileRender ? 0.26 : 0.30, mobileRender),
         blowerMat,
       );
       blowerScroll.rotation.y = Math.PI / 2;
-      blowerScroll.position.copy(blowerCenter);
+      blowerScroll.position.set(blowerX, blowerY, blowerZ);
       blowerScroll.castShadow = !mobileRender;
       blowerScroll.receiveShadow = !mobileRender;
       tagMaterial(blowerScroll, 1, 'utility');
       mark(blowerScroll, name);
       g.add(blowerScroll);
 
-      // Circular inlet eye and rolled inlet rim on the open face of the fan.
+      // Inlet eye / bellmouth.  Slightly smaller than the previous version so
+      // the scroll body remains visible around it.
       const blowerInletRim = new THREE.Mesh(
-        new THREE.TorusGeometry(0.285, 0.040, mobileRender ? 8 : 10, mobileRender ? 24 : 36),
+        new THREE.TorusGeometry(0.255, 0.032, mobileRender ? 8 : 10, mobileRender ? 24 : 38),
         blowerEdgeMat,
       );
       blowerInletRim.rotation.y = Math.PI / 2;
-      blowerInletRim.position.set(-5.53, -0.03, 0.52);
+      blowerInletRim.position.set(blowerX + 0.17, blowerY + 0.02, blowerZ + 0.02);
       tagMaterial(blowerInletRim, 1, 'utility');
       mark(blowerInletRim, name);
       g.add(blowerInletRim);
 
-      const inletBell = cylinderX(0.245, 0.11, blowerEdgeMat, mobileRender ? 24 : 36);
-      inletBell.position.set(-5.47, -0.03, 0.52);
+      const inletBell = cylinderX(0.220, 0.090, blowerEdgeMat, mobileRender ? 24 : 36);
+      inletBell.position.set(blowerX + 0.21, blowerY + 0.02, blowerZ + 0.02);
       tagMaterial(inletBell, 1, 'utility');
       mark(inletBell, name);
       g.add(inletBell);
 
-      const inletDark = cylinderX(0.195, 0.125, material('#13242d', 0.18, 0.62), mobileRender ? 20 : 32);
-      inletDark.position.set(-5.465, -0.03, 0.52);
+      const inletDark = cylinderX(0.175, 0.105, material('#13242d', 0.18, 0.62), mobileRender ? 20 : 32);
+      inletDark.position.set(blowerX + 0.215, blowerY + 0.02, blowerZ + 0.02);
       tagMaterial(inletDark, 1, 'utility');
       mark(inletDark, name);
       g.add(inletDark);
 
-      // Visible impeller hint inside the inlet eye.
-      const impellerHub = cylinderX(0.075, 0.13, trimMat, 18);
-      impellerHub.position.set(-5.47, -0.03, 0.52);
+      // Static impeller hint for the geometry-approval pass.
+      const impellerHub = cylinderX(0.065, 0.11, trimMat, 18);
+      impellerHub.position.set(blowerX + 0.22, blowerY + 0.02, blowerZ + 0.02);
       tagMaterial(impellerHub, 1, 'utility');
       mark(impellerHub, name);
       g.add(impellerHub);
@@ -942,93 +952,103 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const impellerBladeCount = mobileRender ? 6 : 9;
       for (let i = 0; i < impellerBladeCount; i += 1) {
         const angle = (i / impellerBladeCount) * Math.PI * 2;
-        const blade = box(0.050, 0.055, 0.18, blowerEdgeMat);
+        const blade = box(0.044, 0.045, 0.155, blowerEdgeMat);
         blade.position.set(
-          -5.455,
-          -0.03 + Math.sin(angle) * 0.145,
-          0.52 + Math.cos(angle) * 0.145,
+          blowerX + 0.225,
+          blowerY + 0.02 + Math.sin(angle) * 0.128,
+          blowerZ + 0.02 + Math.cos(angle) * 0.128,
         );
-        blade.rotation.x = -angle + 0.58;
-        blade.rotation.z = 0.10;
+        blade.rotation.x = -angle + 0.62;
+        blade.rotation.z = 0.08;
         tagMaterial(blade, 1, 'utility');
         mark(blade, name);
         g.add(blade);
       }
 
-      // Tangential discharge and short transition into the burner windbox.
-      const blowerOutlet = box(0.34, 0.36, 0.46, blowerMat);
-      blowerOutlet.position.set(-5.71, -0.60, 0.15);
+      // Highly legible upper/inner tangential discharge.  Two short sections
+      // form a visible elbow/transition down toward the burner windbox.
+      const blowerOutlet = box(0.42, 0.25, 0.34, blowerMat);
+      blowerOutlet.position.set(-5.49, 0.10, 0.09);
       tagMaterial(blowerOutlet, 1, 'utility');
       mark(blowerOutlet, name);
       g.add(blowerOutlet);
 
-      const outletFlange = box(0.39, 0.08, 0.52, blowerEdgeMat);
-      outletFlange.position.set(-5.71, -0.79, 0.15);
+      const outletFlange = box(0.07, 0.31, 0.40, blowerEdgeMat);
+      outletFlange.position.set(-5.27, 0.10, 0.09);
       tagMaterial(outletFlange, 1, 'utility');
       mark(outletFlange, name);
       g.add(outletFlange);
 
-      const transitionDuct = box(0.48, 0.30, 0.62, paintedMat);
-      transitionDuct.position.set(-5.54, -0.77, 0.15);
-      transitionDuct.rotation.z = -0.18;
-      tagMaterial(transitionDuct, 1, 'utility');
-      mark(transitionDuct, name);
-      g.add(transitionDuct);
+      const transitionUpper = box(0.44, 0.24, 0.36, paintedMat);
+      transitionUpper.position.set(-5.09, -0.02, 0.09);
+      transitionUpper.rotation.z = -0.34;
+      tagMaterial(transitionUpper, 1, 'utility');
+      mark(transitionUpper, name);
+      g.add(transitionUpper);
 
-      // Direct-drive shaft and guarded coupling between motor and impeller.
-      const driveShaft = cylinderX(0.045, 0.25, trimMat, 14);
-      driveShaft.position.set(-5.98, -0.03, 0.52);
+      const transitionLower = box(0.36, 0.28, 0.46, paintedMat);
+      transitionLower.position.set(-5.02, -0.31, 0.10);
+      transitionLower.rotation.z = -0.12;
+      tagMaterial(transitionLower, 1, 'utility');
+      mark(transitionLower, name);
+      g.add(transitionLower);
+
+      // Direct-drive shaft and coupling are deliberately exposed by increasing
+      // the motor/fan spacing.  The guard is compact enough that both hubs are
+      // still visually understandable.
+      const driveShaft = cylinderX(0.040, 0.34, trimMat, 14);
+      driveShaft.position.set(-6.05, motorY, motorZ);
       tagMaterial(driveShaft, 1, 'utility');
       mark(driveShaft, name);
       g.add(driveShaft);
 
-      const couplingHubA = cylinderX(0.105, 0.10, blowerEdgeMat, 18);
-      couplingHubA.position.set(-5.90, -0.03, 0.52);
+      const couplingHubA = cylinderX(0.095, 0.095, blowerEdgeMat, 18);
+      couplingHubA.position.set(-5.92, motorY, motorZ);
       tagMaterial(couplingHubA, 1, 'utility');
       mark(couplingHubA, name);
       g.add(couplingHubA);
 
-      const couplingHubB = cylinderX(0.105, 0.10, blowerEdgeMat, 18);
-      couplingHubB.position.set(-6.06, -0.03, 0.52);
+      const couplingHubB = cylinderX(0.095, 0.095, blowerEdgeMat, 18);
+      couplingHubB.position.set(-6.18, motorY, motorZ);
       tagMaterial(couplingHubB, 1, 'utility');
       mark(couplingHubB, name);
       g.add(couplingHubB);
 
-      const couplingGuard = cylinderX(0.155, 0.32, couplingGuardMat, mobileRender ? 18 : 28);
-      couplingGuard.position.set(-5.98, -0.03, 0.52);
-      tagMaterial(couplingGuard, 0.96, 'utility');
+      const couplingGuard = cylinderX(0.135, 0.30, couplingGuardMat, mobileRender ? 18 : 28);
+      couplingGuard.position.set(-6.05, motorY, motorZ);
+      tagMaterial(couplingGuard, 0.90, 'utility');
       mark(couplingGuard, name);
       g.add(couplingGuard);
 
-      // TEFC-style drive motor body and end bells.
-      const motor = cylinderX(0.27, 0.84, motorMat, mobileRender ? 24 : 36);
-      motor.position.set(-6.48, -0.03, 0.52);
+      // TEFC-style drive motor.  Retain the successful motor design, but move
+      // it slightly rearward so the coupling and fan inlet are no longer visually fused.
+      const motor = cylinderX(0.27, 0.82, motorMat, mobileRender ? 24 : 36);
+      motor.position.set(motorX, motorY, motorZ);
       motor.castShadow = !mobileRender;
       tagMaterial(motor, 1, 'utility');
       mark(motor, name);
       g.add(motor);
 
-      const motorFrontBell = cylinderX(0.30, 0.12, motorEdgeMat, mobileRender ? 22 : 32);
-      motorFrontBell.position.set(-6.02, -0.03, 0.52);
+      const motorFrontBell = cylinderX(0.30, 0.11, motorEdgeMat, mobileRender ? 22 : 32);
+      motorFrontBell.position.set(-6.18, motorY, motorZ);
       tagMaterial(motorFrontBell, 1, 'utility');
       mark(motorFrontBell, name);
       g.add(motorFrontBell);
 
-      const motorRearBell = cylinderX(0.30, 0.12, motorEdgeMat, mobileRender ? 22 : 32);
-      motorRearBell.position.set(-6.94, -0.03, 0.52);
+      const motorRearBell = cylinderX(0.30, 0.11, motorEdgeMat, mobileRender ? 22 : 32);
+      motorRearBell.position.set(-7.08, motorY, motorZ);
       tagMaterial(motorRearBell, 1, 'utility');
       mark(motorRearBell, name);
       g.add(motorRearBell);
 
-      // Longitudinal cooling fins around the motor frame.
       const motorFinCount = mobileRender ? 6 : 10;
       for (let i = 0; i < motorFinCount; i += 1) {
         const angle = (i / motorFinCount) * Math.PI * 2;
-        const fin = box(0.68, 0.026, 0.085, motorEdgeMat);
+        const fin = box(0.66, 0.024, 0.076, motorEdgeMat);
         fin.position.set(
-          -6.48,
-          -0.03 + Math.sin(angle) * 0.285,
-          0.52 + Math.cos(angle) * 0.285,
+          motorX,
+          motorY + Math.sin(angle) * 0.284,
+          motorZ + Math.cos(angle) * 0.284,
         );
         fin.rotation.x = -angle;
         tagMaterial(fin, 1, 'utility');
@@ -1036,23 +1056,22 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         g.add(fin);
       }
 
-      // Motor terminal box and cable gland.
-      const terminalBox = box(0.30, 0.20, 0.28, motorEdgeMat);
-      terminalBox.position.set(-6.46, 0.31, 0.52);
+      const terminalBox = box(0.29, 0.19, 0.27, motorEdgeMat);
+      terminalBox.position.set(motorX + 0.02, motorY + 0.34, motorZ);
       tagMaterial(terminalBox, 1, 'utility');
       mark(terminalBox, name);
       g.add(terminalBox);
 
-      const terminalLid = box(0.34, 0.045, 0.32, trimMat);
-      terminalLid.position.set(-6.46, 0.43, 0.52);
+      const terminalLid = box(0.33, 0.040, 0.31, trimMat);
+      terminalLid.position.set(motorX + 0.02, motorY + 0.455, motorZ);
       tagMaterial(terminalLid, 1, 'utility');
       mark(terminalLid, name);
       g.add(terminalLid);
 
       const cableGland = cylinderBetween(
-        new THREE.Vector3(-6.46, 0.31, 0.68),
-        new THREE.Vector3(-6.46, 0.31, 0.82),
-        0.040,
+        new THREE.Vector3(motorX + 0.02, motorY + 0.34, motorZ + 0.15),
+        new THREE.Vector3(motorX + 0.02, motorY + 0.34, motorZ + 0.29),
+        0.038,
         trimMat,
         10,
       );
@@ -1060,19 +1079,19 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(cableGland, name);
       g.add(cableGland);
 
-      // Open rear cooling-fan guard: ring + hub + spokes instead of a solid disk.
+      // Open rear cooling-fan guard.
       const motorFanGuardRing = new THREE.Mesh(
-        new THREE.TorusGeometry(0.315, 0.032, 8, mobileRender ? 22 : 34),
+        new THREE.TorusGeometry(0.305, 0.029, 8, mobileRender ? 22 : 36),
         motorEdgeMat,
       );
       motorFanGuardRing.rotation.y = Math.PI / 2;
-      motorFanGuardRing.position.set(-7.03, -0.03, 0.52);
+      motorFanGuardRing.position.set(-7.17, motorY, motorZ);
       tagMaterial(motorFanGuardRing, 1, 'utility');
       mark(motorFanGuardRing, name);
       g.add(motorFanGuardRing);
 
-      const guardHub = cylinderX(0.070, 0.10, trimMat, 14);
-      guardHub.position.set(-7.03, -0.03, 0.52);
+      const guardHub = cylinderX(0.064, 0.085, trimMat, 14);
+      guardHub.position.set(-7.17, motorY, motorZ);
       tagMaterial(guardHub, 1, 'utility');
       mark(guardHub, name);
       g.add(guardHub);
@@ -1081,13 +1100,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       for (let i = 0; i < guardSpokes; i += 1) {
         const angle = (i / guardSpokes) * Math.PI * 2;
         const spoke = cylinderBetween(
-          new THREE.Vector3(-7.03, -0.03, 0.52),
+          new THREE.Vector3(-7.17, motorY, motorZ),
           new THREE.Vector3(
-            -7.03,
-            -0.03 + Math.sin(angle) * 0.275,
-            0.52 + Math.cos(angle) * 0.275,
+            -7.17,
+            motorY + Math.sin(angle) * 0.264,
+            motorZ + Math.cos(angle) * 0.264,
           ),
-          0.014,
+          0.012,
           motorEdgeMat,
           7,
         );
@@ -1096,22 +1115,47 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         g.add(spoke);
       }
 
-      // Motor feet and common skid / base plate.
-      [-6.68, -6.28].forEach(x => {
+      // Lightweight skid: two narrow rails and two cross-ties instead of one
+      // thick slab, so the support no longer competes with the machinery.
+      [-0.20, 0.20].forEach(zOffset => {
+        const rail = box(1.42, 0.050, 0.12, darkMat);
+        rail.position.set(motorX, -0.47, motorZ + zOffset);
+        tagMaterial(rail, 1, 'utility');
+        mark(rail, name);
+        g.add(rail);
+      });
+
+      [-6.90, -6.36].forEach(x => {
+        const tie = box(0.12, 0.045, 0.55, motorEdgeMat);
+        tie.position.set(x, -0.445, motorZ);
+        tagMaterial(tie, 1, 'utility');
+        mark(tie, name);
+        g.add(tie);
+      });
+
+      [-6.84, -6.43].forEach(x => {
         [-0.17, 0.17].forEach(zOffset => {
-          const foot = box(0.20, 0.10, 0.20, motorEdgeMat);
-          foot.position.set(x, -0.37, 0.52 + zOffset);
+          const foot = box(0.18, 0.085, 0.18, motorEdgeMat);
+          foot.position.set(x, -0.385, motorZ + zOffset);
           tagMaterial(foot, 1, 'utility');
           mark(foot, name);
           g.add(foot);
         });
       });
 
-      const motorBase = box(1.28, 0.08, 0.74, darkMat);
-      motorBase.position.set(-6.48, -0.45, 0.52);
-      tagMaterial(motorBase, 1, 'utility');
-      mark(motorBase, name);
-      g.add(motorBase);
+      // Small blower pedestal ties the scroll into the skid without creating a
+      // large dark block under the fan.
+      const blowerPedestal = box(0.26, 0.16, 0.42, motorEdgeMat);
+      blowerPedestal.position.set(blowerX, -0.66, blowerZ);
+      tagMaterial(blowerPedestal, 1, 'utility');
+      mark(blowerPedestal, name);
+      g.add(blowerPedestal);
+
+      const blowerPad = box(0.40, 0.045, 0.52, darkMat);
+      blowerPad.position.set(blowerX, -0.755, blowerZ);
+      tagMaterial(blowerPad, 1, 'utility');
+      mark(blowerPad, name);
+      g.add(blowerPad);
 
       // -------------------------------------------------------------------
       // Main fuel gun and nozzle.

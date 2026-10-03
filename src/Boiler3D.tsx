@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { NORMAL_WATER_LEVEL, hollowCylinderX, perforatedTubeSheet, makeStudioEnvironment, geometryBounds, fitDistance, makeInstrumentDial, disposeSceneResources, getFireTubeCoordinates, roundedPipePath } from './boiler3d/industrialGeometry';
+import { upgradeBoilerConstruction, normalizeComponentMaterials, batchStaticConstruction } from './boiler3d/realismUpgrade';
 import type { CameraCommand, ContextMode, ViewMode } from './modelTypes';
 import { addBoltRingX, addFlangeX, cylinderBetween, makeBlowerVoluteGeometry, makeBoilerSurfaceTexture, makeFlameEnvelopeGeometry, makeFlameMaterial } from './boiler3d/sceneHelpers';
 
@@ -12,6 +14,7 @@ type Props = {
   contextMode: ContextMode;
   cameraCommand: CameraCommand;
   onSelect: (name: string) => void;
+  combustionState?: 'off' | 'pilot' | 'firing';
 };
 
 type OrbitState = {
@@ -103,8 +106,8 @@ function material(
   const m = new THREE.MeshPhysicalMaterial({
     color,
     map,
-    metalness,
-    roughness,
+    metalness: map?.userData.surfaceKind === 'paintedSteel' ? 0.08 : metalness,
+    roughness: map?.userData.surfaceKind === 'paintedSteel' ? Math.max(0.52, roughness) : roughness,
     transparent: opacity < 1,
     opacity,
     emissive: emissive ?? 0x000000,
@@ -112,6 +115,7 @@ function material(
     clearcoat: metalness > 0.45 ? 0.08 : 0.02,
     clearcoatRoughness: 0.72,
   });
+  if (map) { m.bumpMap = map; m.bumpScale = map.userData.surfaceKind === 'refractory' ? 0.028 : 0.007; }
   return m;
 }
 
@@ -258,22 +262,26 @@ function addValve(group: THREE.Group, position: THREE.Vector3, scale = 1) {
   group.add(wheel);
 }
 
-export default function Boiler3D({ mode, selected, labels, flow, explode, contextMode, cameraCommand, onSelect }: Props) {
+export default function Boiler3D({ mode, selected, labels, flow, explode, contextMode, cameraCommand, onSelect, combustionState = 'firing' }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const stateRef = useRef<SceneState | null>(null);
   const modeRef = useRef(mode);
   const selectedRef = useRef(selected);
   const labelsRef = useRef(labels);
   const contextModeRef = useRef(contextMode);
+  const onSelectRef = useRef(onSelect);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { selectedRef.current = selected; }, [selected]);
   useEffect(() => { labelsRef.current = labels; }, [labels]);
   useEffect(() => { contextModeRef.current = contextMode; }, [contextMode]);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#0a2234');
@@ -293,17 +301,24 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const mobileRender = window.matchMedia('(max-width: 700px)').matches || host.clientWidth <= 700;
     const camera = new THREE.PerspectiveCamera(mobileRender ? 42 : 38, 1, 0.1, 120);
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: !mobileRender,
-      alpha: false,
-      powerPreference: 'high-performance',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: !mobileRender, alpha: false, powerPreference: 'high-performance' });
+    } catch {
+      disposeSceneResources(scene);
+      setUnavailable(true);
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobileRender ? 1.15 : 1.7));
     renderer.shadowMap.enabled = !mobileRender;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.70;
+    renderer.toneMappingExposure = 1.12;
+    const studioTarget = makeStudioEnvironment(renderer);
+    scene.environment = studioTarget.texture;
+    scene.environmentIntensity = 0.70;
     renderer.localClippingEnabled = true;
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.userSelect = 'none';
@@ -325,6 +340,12 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     let cameraTween: CameraTween | null = null;
 
     const updateCamera = () => {
+      // Aspect-aware mobile fitting can move farther back. Atmospheric fog
+      // follows the view distance so the equipment retains its material contrast.
+      if (scene.fog instanceof THREE.Fog) {
+        scene.fog.near = orbit.radius + 12;
+        scene.fog.far = orbit.radius + 45;
+      }
       camera.position.set(
         orbit.target.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.radius,
         orbit.target.y + Math.sin(orbit.pitch) * orbit.radius,
@@ -336,7 +357,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const transitionCamera = (preset: CameraPreset, duration = 720) => {
       cameraTween = {
         startedAt: performance.now(),
-        duration,
+        duration: reducedMotion ? 0 : duration,
         from: {
           yaw: orbit.yaw,
           pitch: orbit.pitch,
@@ -348,23 +369,28 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     };
     updateCamera();
 
-    const ambient = new THREE.AmbientLight('#a9dcff', mobileRender ? 1.10 : 1.20);
+    const ambient = new THREE.AmbientLight('#dce4e8', 0.25);
     scene.add(ambient);
 
-    const hemi = new THREE.HemisphereLight('#b8e5ff', '#102332', mobileRender ? 1.28 : 1.35);
+    const hemi = new THREE.HemisphereLight('#c8dfed', '#30312b', 0.65);
     hemi.position.set(0, 12, 0);
     scene.add(hemi);
 
-    const key = new THREE.DirectionalLight('#ffffff', mobileRender ? 2.05 : 2.35);
+    const key = new THREE.DirectionalLight('#ffefdb', 3.5);
     key.position.set(-7, 10, 9);
     key.castShadow = !mobileRender;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, {left:-11,right:11,top:11,bottom:-11,near:1,far:38});
+    key.shadow.bias = -0.00025;
+    key.shadow.normalBias = 0.035;
+    key.shadow.radius = 3;
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight('#8ed2ff', mobileRender ? 1.00 : 1.28);
+    const fill = new THREE.DirectionalLight('#b6d2e8', 1.35);
     fill.position.set(8, 5, 7);
     scene.add(fill);
 
-    const rim = new THREE.DirectionalLight('#58bfff', mobileRender ? 0.85 : 1.10);
+    const rim = new THREE.DirectionalLight('#adcddd', 2.4);
     rim.position.set(8, 6, -9);
     scene.add(rim);
 
@@ -376,7 +402,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     frontLift.position.set(-6.5, 2.5, 6.5);
     scene.add(frontLift);
 
-    const fireLight = new THREE.PointLight('#ff7624', mobileRender ? 2.65 : 3.25, 14, 2);
+    const fireLight = new THREE.PointLight('#ff913b', 1.6, 5, 2);
+    fireLight.userData.combustionLight = true;
     fireLight.position.set(-2.4, -0.7, 0);
     scene.add(fireLight);
 
@@ -397,16 +424,16 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(12.8, mobileRender ? 40 : 72),
-      new THREE.MeshStandardMaterial({ color: '#17313e', map: concreteTex, metalness: 0.08, roughness: 0.82 }),
+      new THREE.MeshStandardMaterial({ color: '#3a4145', map: concreteTex, metalness: 0.10, roughness: 0.76 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -3.17;
     ground.receiveShadow = !mobileRender;
     scene.add(ground);
 
-    const grid = new THREE.GridHelper(30, 30, '#2c789c', '#1b4b66');
+    const grid = new THREE.GridHelper(30, 30, '#44535c', '#354650');
     grid.position.y = -3.145;
-    (grid.material as THREE.Material).opacity = 0.28;
+    (grid.material as THREE.Material).opacity = 0.10;
     (grid.material as THREE.Material).transparent = true;
     scene.add(grid);
 
@@ -459,6 +486,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const s = makeLabel(name);
       s.position.copy(pos);
       s.userData.baseLabelScale = s.scale.clone();
+      s.userData.baseLabelPosition = s.position.clone();
       s.userData.component = name;
       s.userData.labelPriority = labelPriority[name] ?? 1;
       labelGroup.add(s);
@@ -469,6 +497,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       s.position.copy(pos);
       s.scale.set(mobileRender ? 1.08 : 1.30, mobileRender ? 0.205 : 0.245, 1);
       s.userData.baseLabelScale = s.scale.clone();
+      s.userData.baseLabelPosition = s.position.clone();
       s.userData.component = componentName;
       labelGroup.add(s);
       return s;
@@ -479,18 +508,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       s.position.copy(pos);
       s.scale.set(mobileRender ? 1.00 : 1.22, mobileRender ? 0.19 : 0.225, 1);
       s.userData.baseLabelScale = s.scale.clone();
+      s.userData.baseLabelPosition = s.position.clone();
       s.userData.component = componentName;
       labelGroup.add(s);
       return s;
     };
 
-    const fireTubeCoords: [number, number][] = [];
-    [-1.35, -0.9, -0.45, 0, 0.45, 0.9, 1.35].forEach(y => {
-      [-1.45, -0.95, -0.45, 0.45, 0.95, 1.45].forEach(z => {
-        if (y < -0.45 && Math.abs(z) < 0.95) return;
-        if (Math.hypot(y * 0.92, z) < 1.95) fireTubeCoords.push([y, z]);
-      });
-    });
+    const fireTubeCoords = getFireTubeCoordinates();
 
     // The master model is a schematic three-pass fire-tube arrangement.
     // Pass 1 is the furnace.  The lower fire-tube bank returns gas to the
@@ -503,7 +527,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Boiler Shell';
       const g = component(name);
-      const shellMat = material('#7c8e96', 0.78, 0.31, 1, undefined, paintedSteelTex);
+      const shellMat = material('#acb4b6', 0.08, 0.55, 1, undefined, paintedSteelTex);
       const seamMat = material('#b3c1c8', 0.86, 0.23, 1, undefined, stainlessTex);
       const supportMat = material('#52646e', 0.80, 0.40, 1, undefined, darkSteelTex);
 
@@ -582,29 +606,31 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Water Space';
       const g = component(name);
-      const waterMat = material('#1d9bd1', 0.06, 0.18, 0.115);
-      waterMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.62)];
+      const waterMat = material('#607c85', 0, 0.32, 0.09);
+      waterMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), NORMAL_WATER_LEVEL)];
       const water = cylinderX(2.16, 7.45, waterMat, mobileRender ? 40 : 56);
-      tagMaterial(water, 0.115, 'fluid');
+      tagMaterial(water, 0.09, 'fluid');
       mark(water, name);
       g.add(water);
 
       const surface = new THREE.Mesh(
-        new THREE.PlaneGeometry(7.10, 3.45),
+        new THREE.PlaneGeometry(7.10, 2 * Math.sqrt(2.16 ** 2 - NORMAL_WATER_LEVEL ** 2)),
         new THREE.MeshPhysicalMaterial({
-          color: '#56c8f5',
+          color: '#7f9da6',
           metalness: 0.02,
           roughness: 0.15,
           transparent: true,
-          opacity: 0.22,
+          opacity: 0.16,
+          depthWrite: false,
           clearcoat: 0.2,
           clearcoatRoughness: 0.18,
           side: THREE.DoubleSide,
         }),
       );
       surface.rotation.x = -Math.PI / 2;
-      surface.position.y = 0.62;
-      tagMaterial(surface, 0.22, 'fluid');
+      surface.position.y = NORMAL_WATER_LEVEL;
+      surface.userData.waterSurface = true;
+      tagMaterial(surface, 0.16, 'fluid');
       mark(surface, name);
       g.add(surface);
       addLabel(name, new THREE.Vector3(0.8, -1.75, 2.0));
@@ -613,7 +639,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const name = 'Steam Space';
       const g = component(name);
       const steamMat = material('#d9f4ff', 0.01, 0.15, 0.07);
-      steamMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.62)];
+      steamMat.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -NORMAL_WATER_LEVEL)];
       const steam = cylinderX(2.15, 7.4, steamMat, mobileRender ? 40 : 56);
       tagMaterial(steam, 0.07, 'fluid');
       mark(steam, name);
@@ -626,7 +652,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const name = 'Furnace Tube';
       const g = component(name);
       const furnaceMat = material('#46545c', 0.84, 0.31, 1, undefined, darkSteelTex);
-      const furnace = cylinderX(0.82, 6.7, furnaceMat, mobileRender ? 36 : 52);
+      const furnace = new THREE.Mesh(hollowCylinderX(0.82, 0.73, 6.90, mobileRender ? 36 : 64), furnaceMat);
+      furnace.userData.furnaceWall = true;
       furnace.position.y = -0.82;
       tagMaterial(furnace, 1, 'internal');
       mark(furnace, name);
@@ -637,16 +664,18 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const corrugationCount = mobileRender ? 7 : 11;
       for (let i = 0; i < corrugationCount; i += 1) {
         const x = -2.85 + i * (5.70 / Math.max(1, corrugationCount - 1));
-        const ring = cylinderX(0.855, 0.055, corrugationMat, mobileRender ? 28 : 40);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.825, 0.035, 6, mobileRender ? 32 : 56), corrugationMat);
+        ring.rotation.y = Math.PI / 2; ring.userData.furnaceWall = true;
         ring.position.set(x, -0.82, 0);
         tagMaterial(ring, 1, 'internal');
         mark(ring, name);
         g.add(ring);
       }
 
-      const inner = cylinderX(0.68, 6.45, material('#8d2b10', 0.15, 0.55, 0.22, '#ff4e13'));
+      const inner = new THREE.Mesh(hollowCylinderX(0.732, 0.717, 6.84, 48), material('#655045', 0.02, 0.91, 1));
+      inner.userData.furnaceWall = true;
       inner.position.y = -0.82;
-      tagMaterial(inner, 0.22, 'internal');
+      tagMaterial(inner, 1, 'internal');
       mark(inner, name);
       g.add(inner);
       addLabel(name, new THREE.Vector3(0.2, -0.85, 1.2));
@@ -660,23 +689,14 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const pass2Mat = material('#9b6f4d', 0.84, 0.30, 1, '#5e2110', darkSteelTex);
       const pass3Mat = material('#6f8790', 0.86, 0.29, 1, '#17394a', darkSteelTex);
 
-      pass2TubeCoords.forEach(([y, z]) => {
-        const t = cylinderX(0.105, 6.72, pass2Mat, mobileRender ? 10 : 16);
-        t.position.set(0, y + 0.18, z);
-        t.userData.gasPass = 2;
-        tagMaterial(t, 1, 'internal');
-        mark(t, name);
-        g.add(t);
-      });
-
-      pass3TubeCoords.forEach(([y, z]) => {
-        const t = cylinderX(0.105, 6.72, pass3Mat, mobileRender ? 10 : 16);
-        t.position.set(0, y + 0.18, z);
-        t.userData.gasPass = 3;
-        tagMaterial(t, 1, 'internal');
-        mark(t, name);
-        g.add(t);
-      });
+      const tubeGeometry = hollowCylinderX(0.105, 0.082, 6.98, mobileRender ? 12 : 20);
+      for (const [coords, mat, pass] of [[pass2TubeCoords, pass2Mat, 2], [pass3TubeCoords, pass3Mat, 3]] as const) {
+        const tubes = new THREE.InstancedMesh(tubeGeometry, mat, coords.length);
+        const dummy = new THREE.Object3D();
+        coords.forEach(([y,z], index) => { dummy.position.set(0, y + 0.18, z); dummy.updateMatrix(); tubes.setMatrixAt(index, dummy.matrix); });
+        tubes.userData.gasPass = pass;
+        tagMaterial(tubes, 1, 'internal');mark(tubes, name);g.add(tubes);
+      }
 
       addLabel(name, new THREE.Vector3(0.2, 0.55, -2.15));
       addDetailLabel('PASS 2 · REAR → FRONT', name, new THREE.Vector3(0.10, -0.05, -2.16));
@@ -693,9 +713,10 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const tubeEndGeometry = new THREE.TorusGeometry(0.118, 0.016, 7, mobileRender ? 12 : 18);
 
       [-3.46, 3.46].forEach(x => {
-        const sheet = cylinderX(2.16, 0.16, sheetMat, mobileRender ? 44 : 60);
+        const sheet = new THREE.Mesh(perforatedTubeSheet(fireTubeCoords, 0.16, mobileRender ? 28 : 48), sheetMat);
+        sheet.userData.sectionable = true;
         sheet.position.x = x;
-        tagMaterial(sheet, 0.78, 'internal');
+        tagMaterial(sheet, 1, 'internal');
         mark(sheet, name);
         g.add(sheet);
 
@@ -795,7 +816,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const name = 'Burner & Ignition';
       const g = component(name);
 
-      const paintedMat = material('#88a0ab', 0.72, 0.28, 1, undefined, paintedSteelTex);
+      const paintedMat = material('#b15c29', 0.08, 0.52, 1, undefined, paintedSteelTex);
       const darkMat = material('#5d7079', 0.74, 0.32, 1, undefined, darkSteelTex);
       const trimMat = material('#d0d9dd', 0.88, 0.20, 1, undefined, stainlessTex);
       const brassMat = material('#c89549', 0.68, 0.28);
@@ -1333,6 +1354,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       pilotOuter.position.set(-3.60, -0.61, 0.21);
       pilotOuter.userData.baseScale = new THREE.Vector3(1, 1, 1);
       pilotOuter.userData.phase = 1.7;
+      pilotOuter.userData.flameStage = 'pilot';
       tagMaterial(pilotOuter, 0.70, 'internal');
       mark(pilotOuter, name);
       g.add(pilotOuter);
@@ -1351,6 +1373,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       pilotCore.position.set(-3.59, -0.61, 0.21);
       pilotCore.userData.baseScale = new THREE.Vector3(1, 1, 1);
       pilotCore.userData.phase = 3.2;
+      pilotCore.userData.flameStage = 'pilot';
       tagMaterial(pilotCore, 0.72, 'internal');
       mark(pilotCore, name);
       g.add(pilotCore);
@@ -1413,6 +1436,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       sparkGap.userData.component = name;
       sparkGap.userData.kind = 'utility';
       sparkGap.userData.baseOpacity = 0.88;
+      sparkGap.userData.ignitionSpark = true;
       g.add(sparkGap);
 
       const hvCable = new THREE.Mesh(
@@ -1511,6 +1535,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         mesh.position.set(flameRootX, -0.82 + yOffset, zOffset);
         mesh.userData.baseScale = new THREE.Vector3(1, 1, 1);
         mesh.userData.phase = seed * 0.37;
+        mesh.userData.flameStage = 'main';
         tagMaterial(mesh, opacity, 'internal');
         mark(mesh, name);
         g.add(mesh);
@@ -1556,8 +1581,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addFlameLayer(
         1.08,
         [[0, 0.035], [0.10, 0.11], [0.30, 0.21], [0.55, 0.18], [0.80, 0.09], [1, 0.008]],
-        '#fffdf0',
-        '#ffe073',
+        '#73b8ed',
+        '#c2e1ff',
         mobileRender ? 0.72 : 0.82,
         9.6,
         0,
@@ -1568,12 +1593,14 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const rootLight = new THREE.PointLight('#ffd26a', mobileRender ? 1.15 : 1.75, 4.2, 2);
       rootLight.position.set(-3.15, -0.82, 0);
       rootLight.userData.baseIntensity = rootLight.intensity;
+      rootLight.userData.combustionLight = true;
       g.add(rootLight);
       flameLights.push(rootLight);
 
       const bodyLight = new THREE.PointLight('#ff6b22', mobileRender ? 0.55 : 0.85, 5.8, 2);
       bodyLight.position.set(-1.95, -0.82, 0);
       bodyLight.userData.baseIntensity = bodyLight.intensity;
+      bodyLight.userData.combustionLight = true;
       g.add(bodyLight);
       flameLights.push(bodyLight);
 
@@ -1676,13 +1703,13 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     {
       const name = 'Economizer';
       const g = component(name);
-      const casingMat = material('#405762', 0.70, 0.42, 0.34, undefined, paintedSteelTex);
+      const casingMat = material('#556b78', 0.08, 0.62, 1, undefined, paintedSteelTex);
       const tubeMat = material('#7495a1', 0.82, 0.30, 1, undefined, stainlessTex);
       const headerMat = material('#556d77', 0.84, 0.31, 1, undefined, darkSteelTex);
 
       const casing = box(1.68, 1.82, 2.42, casingMat);
       casing.position.set(4.78, 2.08, 0);
-      tagMaterial(casing, 0.34, 'shell');
+      tagMaterial(casing, 1, 'shell');
       mark(casing, name);
       g.add(casing);
 
@@ -1911,9 +1938,10 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       mark(gaugeBody, name);
       g.add(gaugeBody);
 
+      const dialTexture = makeInstrumentDial(); generatedTextures.push(dialTexture);
       const dial = new THREE.Mesh(
         new THREE.CircleGeometry(0.30, mobileRender ? 24 : 36),
-        new THREE.MeshBasicMaterial({ color: '#eef2f2', side: THREE.DoubleSide }),
+        new THREE.MeshBasicMaterial({ color: '#ffffff', map:dialTexture, side: THREE.DoubleSide }),
       );
       dial.rotation.y = Math.PI / 2;
       dial.position.set(-1.875, 2.82, -0.52);
@@ -2141,6 +2169,10 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       addLabel(name, new THREE.Vector3(-0.15, 3.55, 1.15));
     }
 
+    upgradeBoilerConstruction(components, mobileRender);
+    normalizeComponentMaterials(components);
+    batchStaticConstruction(components);
+
     // Flow particles: explicit three-pass flue-gas path plus boiler water and
     // a dedicated burner learning overlay.
     const hotMat = material('#ff8c38', 0.0, 0.2, 0.90, '#ff4e13');
@@ -2165,28 +2197,26 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const hotGeometry = new THREE.SphereGeometry(0.055, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
     const waterGeometry = new THREE.SphereGeometry(0.05, mobileRender ? 6 : 8, mobileRender ? 6 : 8);
     const burnerFlowGeometry = new THREE.SphereGeometry(mobileRender ? 0.060 : 0.078, mobileRender ? 5 : 8, mobileRender ? 5 : 8);
-    const gasPassCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-3.42, -0.82, 0.00),
-      new THREE.Vector3(-1.20, -0.82, 0.00),
-      new THREE.Vector3(1.55, -0.82, 0.00),
-      new THREE.Vector3(3.34, -0.82, 0.00),
-      new THREE.Vector3(3.70, -0.35, 0.15),
-      new THREE.Vector3(3.35, 0.10, 0.55),
-      new THREE.Vector3(1.10, 0.05, 0.55),
-      new THREE.Vector3(-1.40, 0.05, 0.55),
-      new THREE.Vector3(-3.36, 0.05, 0.55),
-      new THREE.Vector3(-3.72, 0.62, 0.25),
-      new THREE.Vector3(-3.34, 1.22, -0.48),
-      new THREE.Vector3(-1.10, 1.22, -0.48),
-      new THREE.Vector3(1.45, 1.22, -0.48),
-      new THREE.Vector3(3.40, 1.22, -0.48),
-      new THREE.Vector3(4.12, 1.46, -0.18),
-      new THREE.Vector3(4.55, 2.05, 0.00),
-      new THREE.Vector3(4.78, 2.72, 0.00),
-      new THREE.Vector3(4.78, 3.55, 0.00),
-      new THREE.Vector3(4.78, 4.75, 0.00),
-      new THREE.Vector3(4.78, 6.00, 0.00),
-    ], false, 'centripetal', 0.35);
+    const gasPassCurve = new THREE.CurvePath<THREE.Vector3>();
+    const point = (x:number,y:number,z:number) => new THREE.Vector3(x,y,z);
+    gasPassCurve.add(new THREE.LineCurve3(point(-3.42,-.82,0),point(3.44,-.82,0)));
+    gasPassCurve.add(new THREE.QuadraticBezierCurve3(point(3.44,-.82,0),point(4.10,-.30,.20),point(3.44,.18,.45)));
+    gasPassCurve.add(new THREE.LineCurve3(point(3.44,.18,.45),point(-3.44,.18,.45)));
+    gasPassCurve.add(new THREE.QuadraticBezierCurve3(point(-3.44,.18,.45),point(-4.03,.75,0),point(-3.44,1.08,-.45)));
+    gasPassCurve.add(new THREE.LineCurve3(point(-3.44,1.08,-.45),point(3.44,1.08,-.45)));
+    gasPassCurve.add(new THREE.CatmullRomCurve3([point(3.44,1.08,-.45),point(4.12,1.46,-.18),point(4.78,2.08,0),point(4.78,3.42,0),point(4.78,6.10,0)]));
+    const waterSteamCurve = new THREE.CurvePath<THREE.Vector3>();
+    const feedPath = roundedPipePath([[5.08,2.58,.98],[5.80,2.58,.98],[5.80,.75,3.78],[2.15,.75,3.78]],.12);
+    waterSteamCurve.add(feedPath);
+    waterSteamCurve.add(new THREE.LineCurve3(point(2.15,.75,3.78),point(2.15,.75,2.18)));
+    const heatingPath = new THREE.CatmullRomCurve3([point(2.15,.75,2.18),point(1.30,.50,1.45),point(.20,1.35,1.10),point(.30,NORMAL_WATER_LEVEL,.60)],false,'centripetal');
+    waterSteamCurve.add(heatingPath);
+    const liquidPathLength = waterSteamCurve.getLength();
+    waterSteamCurve.add(new THREE.CatmullRomCurve3([point(.30,NORMAL_WATER_LEVEL,.60),point(.65,1.98,.15),point(1.45,2.32,-.30)],false,'centripetal'));
+    waterSteamCurve.add(roundedPipePath([[1.45,2.32,-.30],[1.45,4,-.30],[2.30,4,-.30]],.18));
+    const vaporStartsAt = liquidPathLength / waterSteamCurve.getLength();
+    const vaporFlowMat = new THREE.MeshBasicMaterial({color:'#d4e1e0',transparent:true,opacity:.75,depthWrite:false});
+
 
     const hotCount = mobileRender ? 18 : 30;
     const waterCount = mobileRender ? 10 : 16;
@@ -2259,15 +2289,15 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     scene.add(selectionGlow);
 
     const presetForObject = (object: THREE.Object3D, multiplier = 1.65): CameraPreset | null => {
-      const bounds = new THREE.Box3().setFromObject(object);
+      const bounds = geometryBounds(object);
       if (bounds.isEmpty()) return null;
-      const size = bounds.getSize(new THREE.Vector3());
-      const center = bounds.getCenter(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
+      const center = object === root ? new THREE.Vector3(-0.35,0.62,0.40) : bounds.getCenter(new THREE.Vector3());
+      const fitYaw = object === root ? -0.82 : orbit.yaw;
+      const fitPitch = object === root ? 0.26 : orbit.pitch;
       return {
-        yaw: orbit.yaw,
-        pitch: THREE.MathUtils.clamp(orbit.pitch, -0.36, 0.58),
-        radius: THREE.MathUtils.clamp(Math.max(3.9, maxDim * multiplier * (mobileRender ? 1.12 : 1)), 3.4, 34),
+        yaw: fitYaw,
+        pitch: fitPitch,
+        radius: fitDistance(bounds, camera, fitYaw, fitPitch, multiplier > 1.8 ? 1.20 : 1.04, center),
         target: [center.x, center.y, center.z],
       };
     };
@@ -2297,6 +2327,12 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       const hits = raycaster.intersectObjects(root.children, true);
       let fallback: string | undefined;
       for (const hit of hits) {
+        const mesh = hit.object;
+        if (!mesh.visible) continue;
+        if (mesh instanceof THREE.Mesh) {
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          if (mats.every(m => m.opacity < 0.12 || m.clippingPlanes?.some((p: THREE.Plane) => p.distanceToPoint(hit.point) < -0.001))) continue;
+        }
         let obj: THREE.Object3D | null = hit.object;
         let componentName: string | undefined;
         while (obj && obj !== root) {
@@ -2340,7 +2376,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         const distance = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
         const center = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
         if (pinchDistance > 0) {
-          orbit.radius = THREE.MathUtils.clamp(orbit.radius * (pinchDistance / Math.max(distance, 1)), 3.4, 34);
+          orbit.radius = THREE.MathUtils.clamp(orbit.radius * (pinchDistance / Math.max(distance, 1)), 2.0, 48);
         }
         const panScale = Math.max(0.006, orbit.radius * 0.00075);
         orbit.target.x -= (center.x - pinchCenter.x) * panScale;
@@ -2384,7 +2420,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         const name = pickComponent(event.clientX, event.clientY);
         if (name) {
           const now = performance.now();
-          onSelect(name);
+          onSelectRef.current(name);
           if (event.pointerType === 'touch' && now - lastTapAt < 320) {
             const object = components.get(name);
             if (object) fitObject(object, 2.05, 520);
@@ -2397,7 +2433,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       cameraTween = null;
-      orbit.radius = THREE.MathUtils.clamp(orbit.radius + event.deltaY * 0.018, 3.4, 34);
+      orbit.radius = THREE.MathUtils.clamp(orbit.radius + event.deltaY * 0.018, 2.0, 48);
       updateCamera();
     };
 
@@ -2415,6 +2451,17 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      if (stateRef.current) {
+        const current = contextModeRef.current === 'full' ? root : components.get(selectedRef.current) ?? root;
+        const bounds = geometryBounds(current);
+        const center = current === root ? new THREE.Vector3(-0.35,0.62,0.40) : bounds.getCenter(new THREE.Vector3());
+        const hint = current === root ? undefined : cameraHints[current.name];
+        orbit.target.copy(center);
+        orbit.yaw = hint?.yaw ?? orbit.yaw;
+        orbit.pitch = hint?.pitch ?? orbit.pitch;
+        orbit.radius = fitDistance(bounds, camera, orbit.yaw, orbit.pitch, current === root ? 1.04 : 1.27, center);
+        cameraTween = null; updateCamera();
+      }
     };
     resize();
     const resizeObserver = new ResizeObserver(resize);
@@ -2425,10 +2472,11 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
     let lastFrame = performance.now();
     const animate = () => {
       const now = performance.now();
-      const t = clock.getElapsedTime();
+      if (document.hidden) { raf = requestAnimationFrame(animate); return; }
+      const t = reducedMotion ? 0 : clock.getElapsedTime();
 
       if (cameraTween) {
-        const raw = THREE.MathUtils.clamp((now - cameraTween.startedAt) / cameraTween.duration, 0, 1);
+        const raw = cameraTween.duration <= 0 ? 1 : THREE.MathUtils.clamp((now - cameraTween.startedAt) / cameraTween.duration, 0, 1);
         const eased = raw < 0.5 ? 4 * raw * raw * raw : 1 - Math.pow(-2 * raw + 2, 3) / 2;
         orbit.yaw = THREE.MathUtils.lerp(cameraTween.from.yaw, cameraTween.to.yaw, eased);
         orbit.pitch = THREE.MathUtils.lerp(cameraTween.from.pitch, cameraTween.to.pitch, eased);
@@ -2442,9 +2490,10 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         if (raw >= 1) cameraTween = null;
       }
 
+      let assemblyMoving = false;
       components.forEach(group => {
         const target = group.userData.targetPosition as THREE.Vector3 | undefined;
-        if (target) group.position.lerp(target, mobileRender ? 0.16 : 0.11);
+        if (target && group.position.distanceToSquared(target) > 0.00001) { reducedMotion ? group.position.copy(target) : group.position.lerp(target, mobileRender ? 0.16 : 0.11); assemblyMoving = true; }
       });
 
       // Label LOD / decluttering:
@@ -2474,7 +2523,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           } else if (detailLabel) {
             visible = componentName === selectedNow && contextNow !== 'full';
           } else {
-            visible = contextNow === 'full' || componentName === selectedNow || contextNow === 'focus';
+            visible = contextNow === 'full' || componentName === selectedNow;
           }
         }
 
@@ -2485,10 +2534,15 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
 
         label.visible = visible;
 
+        const basePosition = label.userData.baseLabelPosition as THREE.Vector3 | undefined;
+        if (basePosition) label.position.copy(basePosition).add(components.get(componentName ?? '')?.position ?? new THREE.Vector3());
         const base = label.userData.baseLabelScale as THREE.Vector3 | undefined;
         if (base) {
-          const scaleBoost = farZoom ? 1.14 : mediumZoom ? 1.07 : 1;
-          label.scale.set(base.x * scaleBoost, base.y * scaleBoost, base.z);
+          const world = label.getWorldPosition(new THREE.Vector3());
+          const distance = camera.position.distanceTo(world);
+          const pixelWidth = detailLabel ? (mobileRender ? 106 : 135) : (mobileRender ? 112 : 146);
+          const width = pixelWidth * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * distance / Math.max(1,host.clientHeight);
+          label.scale.set(width, width * base.y / base.x, 1);
         }
 
         label.material.opacity = !visible
@@ -2503,6 +2557,22 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
                   ? 0.82
                   : 0.34;
       });
+
+      if (contextNow === 'full') {
+        const occupied: { x: number; y: number; w: number; h: number }[] = [];
+        const ordered = [...labelGroup.children].sort((a,b) =>
+          Number(b.userData.component === selectedNow) - Number(a.userData.component === selectedNow) ||
+          (b.userData.labelPriority ?? 1) - (a.userData.labelPriority ?? 1));
+        ordered.forEach(label => {
+          if (!label.visible || !(label instanceof THREE.Sprite)) return;
+          const projected = label.getWorldPosition(new THREE.Vector3()).project(camera);
+          const w = mobileRender ? 112 : 146;
+          const h = w * label.scale.y / label.scale.x;
+          const rect = {x:(projected.x+1)*host.clientWidth/2-w/2, y:(1-projected.y)*host.clientHeight/2-h/2,w,h};
+          if (projected.z > 1 || occupied.some(r => rect.x < r.x+r.w+6 && rect.x+rect.w+6 > r.x && rect.y < r.y+r.h+5 && rect.y+rect.h+5 > r.y)) label.visible = false;
+          else occupied.push(rect);
+        });
+      }
 
       flameLayers.forEach((mesh, index) => {
         const mat = mesh.material as THREE.ShaderMaterial;
@@ -2534,8 +2604,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
             const u = (phase + t * 0.055) % 1;
             const point = gasPassCurve.getPointAt(u);
             child.position.copy(point);
-            child.position.y += Math.sin((u * 10 + phase) * Math.PI * 2) * 0.035;
-            child.position.z += Math.cos((u * 8 + phase) * Math.PI * 2) * 0.045;
+
 
             const gasMesh = child as THREE.Mesh;
             if (u < 0.23) gasMesh.material = hotMat;
@@ -2544,7 +2613,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
             else gasMesh.material = outletGasMat;
           } else if (flowType === 'water') {
             const u = (phase + t * 0.07) % 1;
-            child.position.set(-2.8 + Math.sin((phase + t * 0.03) * 5) * 2.3, -1.7 + u * 3.3, 1.55 + Math.cos(phase * 10) * 0.28);
+            child.position.copy(waterSteamCurve.getPointAt(u));
+            (child as THREE.Mesh).material = u > vaporStartsAt ? vaporFlowMat : blueMat;
           } else if (flowType === 'burnerAir') {
             const u = (phase + t * 0.135) % 1;
             const point = burnerAirCurve.getPointAt(u);
@@ -2572,12 +2642,23 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         lastFrame = now;
       }
 
+      if (assemblyMoving) renderer.shadowMap.needsUpdate = true;
       renderer.render(scene, camera);
+      if (!host.dataset.ready) host.dataset.ready = 'true';
+      if (now - Number(host.dataset.statsAt ?? 0) > 750) {
+        host.dataset.statsAt = String(now);
+        host.dataset.drawCalls = String(renderer.info.render.calls);
+        host.dataset.triangles = String(renderer.info.render.triangles);
+        host.dataset.geometries = String(renderer.info.memory.geometries);
+        host.dataset.textures = String(renderer.info.memory.textures);
+        host.dataset.cameraFinite = String(camera.position.toArray().every(Number.isFinite) && camera.quaternion.toArray().every(Number.isFinite));
+        host.dataset.cameraPose = [orbit.yaw,orbit.pitch,orbit.radius,...orbit.target.toArray()].map(n=>n.toFixed(4)).join(',');
+      }
       raf = requestAnimationFrame(animate);
     };
     animate();
 
-    renderer.compile(scene, camera);
+    renderer.shadowMap.needsUpdate = true;
     stateRef.current = { scene, camera, renderer, orbit, updateCamera, transitionCamera, root, components, labelGroup, flowGroup, highlight, selectionGlow, burnerKey, burnerFill, burnerRim, mobileRender };
     fitObject(root, mobileRender ? 1.62 : 1.4, 0);
 
@@ -2590,29 +2671,21 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       renderer.domElement.removeEventListener('pointercancel', onPointerUp);
       renderer.domElement.removeEventListener('wheel', onWheel);
       renderer.domElement.removeEventListener('contextmenu', onContextMenu);
-      scene.traverse(obj => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry.dispose();
-          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          mats.forEach(m => m.dispose());
-        }
-        if (obj instanceof THREE.Sprite) {
-          const sm = obj.material as THREE.SpriteMaterial;
-          sm.map?.dispose();
-          sm.dispose();
-        }
-      });
-      generatedTextures.forEach(texture => texture.dispose());
+      disposeSceneResources(scene, generatedTextures, [hotMat, pass2GasMat, pass3GasMat, outletGasMat, blueMat, vaporFlowMat, burnerAirMat, burnerFuelMat]);
+      studioTarget.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
       if (renderer.domElement.parentElement === host) host.removeChild(renderer.domElement);
       stateRef.current = null;
     };
-  }, [onSelect]);
+  }, []);
 
   useEffect(() => {
     const state = stateRef.current;
     if (!state) return;
 
+    state.renderer.shadowMap.needsUpdate = true;
+    state.root.updateWorldMatrix(true,true);
     state.labelGroup.visible = labels;
     state.flowGroup.visible = flow;
 
@@ -2645,6 +2718,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
           : waterFlowMode
             ? flowType === 'water'
             : flowType === 'gas' || flowType === 'water';
+      if (flowType === 'gas' && combustionState !== 'firing') child.visible = false;
+      if (flowType === 'burnerFuel' && (combustionState === 'off' || (combustionState === 'pilot' && child.userData.fuelPath !== 'pilot'))) child.visible = false;
     });
 
     state.components.forEach((group, name) => {
@@ -2656,8 +2731,8 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       let contextFactor = contextMode === 'full' || name === selected
         ? 1
         : contextMode === 'focus'
-          ? 0.22
-          : 0.035;
+          ? 0.10
+          : 0.02;
 
       // Burner hero view: keep only the throat/furnace as readable supporting context.
       if (selected === 'Burner & Ignition' && contextMode === 'focus') {
@@ -2680,36 +2755,55 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
         const kind = (obj.userData.kind as string | undefined) ?? 'internal';
         const baseOpacity = (obj.userData.baseOpacity as number | undefined) ?? 1;
         let modeFactor = 1;
-        if (kind === 'shell') {
-          if (mode === 'cutaway') modeFactor = 0.48;
-          if (mode === 'xray') modeFactor = 0.08;
-        } else if (kind === 'internal' && mode === 'xray') {
-          modeFactor = 0.58;
-        } else if (kind === 'utility' && mode === 'xray') {
-          modeFactor = 0.72;
-        }
-        const opacity = Math.max(0.015, baseOpacity * modeFactor * contextFactor);
+        const sectionable = kind === 'shell' || obj.userData.sectionable || obj.userData.furnaceWall;
+        const removeNearSide = mode === 'cutaway' && sectionable;
+        if (kind === 'shell' && mode === 'xray') modeFactor = 0.10;
+        else if (kind === 'utility' && mode === 'xray') modeFactor = 0.72;
+        const gaugeDatum = selected === 'Level Gauge' && contextMode === 'focus' && name === 'Water Space' && obj.userData.waterSurface;
+        const furnaceFlame = selected === 'Furnace Tube' && Boolean(obj.userData.flameStage);
+        const opacity = gaugeDatum ? 0.24 : furnaceFlame ? baseOpacity * 0.85 : baseOpacity * modeFactor * contextFactor;
+        obj.visible = !(kind === 'fluid' && mode === 'normal' && contextMode === 'full');
+        if (name !== selected && contextMode !== 'full' && (kind === 'internal' || kind === 'fluid') && name !== 'Furnace Tube') obj.visible = false;
+        if (gaugeDatum) obj.visible = true;
+        if (furnaceFlame) obj.visible = true;
+        if (name !== selected && contextMode === 'isolate' && name !== 'Furnace Tube' && name !== 'Front Smokebox') obj.visible = false;
+        if (obj.userData.cutEdge) obj.visible = mode === 'cutaway';
+        if (obj.userData.flameStage === 'main' && combustionState !== 'firing') obj.visible = false;
+        if (obj.userData.flameStage === 'pilot' && combustionState === 'off') obj.visible = false;
+        if (obj.userData.ignitionSpark && combustionState !== 'pilot') obj.visible = false;
+        obj.castShadow = !state.mobileRender && opacity > 0.95 && kind !== 'fluid';
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        const physicalPlanes = (obj.userData.physicalClipping as THREE.Plane[] | undefined) ?? [];
+        const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0).applyMatrix4(state.root.matrixWorld);
         mats.forEach(mat => {
           if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uContextOpacity) {
-            mat.uniforms.uContextOpacity.value = THREE.MathUtils.clamp(opacity / Math.max(baseOpacity, 0.001), 0.02, 1);
-            mat.transparent = true;
-            mat.depthWrite = false;
-            mat.clippingPlanes = null;
-            mat.needsUpdate = true;
+            mat.uniforms.uContextOpacity.value = THREE.MathUtils.clamp(opacity / Math.max(baseOpacity, 0.001), 0.01, 1);
+            mat.transparent = true; mat.depthWrite = false; mat.clippingPlanes = null;
             return;
           }
+          const wasTransparent = mat.transparent;
+          const wasClipped = Boolean(mat.clippingPlanes?.length);
           mat.opacity = opacity;
           mat.transparent = opacity < 0.98;
-          mat.depthWrite = opacity > 0.55;
-          mat.clippingPlanes = kind === 'shell' && mode === 'cutaway'
-            ? [new THREE.Plane(new THREE.Vector3(0, 0, 1), 0.04)]
-            : null;
+          mat.depthWrite = opacity > 0.92 && kind !== 'fluid';
+          mat.side = THREE.DoubleSide;
+          mat.clippingPlanes = physicalPlanes.map(plane => plane.clone().applyMatrix4(state.root.matrixWorld));
+          if (removeNearSide) mat.clippingPlanes.push(cutPlane);
           mat.clipShadows = true;
-          mat.needsUpdate = true;
+          if (wasTransparent !== mat.transparent || wasClipped !== Boolean(mat.clippingPlanes.length)) mat.needsUpdate = true;
         });
       });
     });
+
+    let mainFlames = 0;
+    state.scene.traverse(obj => {
+      if (obj.userData.combustionLight) obj.visible = combustionState === 'firing';
+      if (obj.userData.flameStage === 'main' && obj.visible) mainFlames++;
+    });
+    if (hostRef.current) {
+      hostRef.current.dataset.combustionState = combustionState;
+      hostRef.current.dataset.mainFlames = String(mainFlames);
+    }
 
     state.labelGroup.children.forEach(label => {
       const componentName = label.userData.component as string | undefined;
@@ -2720,7 +2814,7 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       } else {
         label.visible = detailLabel
           ? labels && componentName === selected && contextMode !== 'full'
-          : labels && (contextMode === 'full' || componentName === selected || contextMode === 'focus');
+          : labels && (contextMode === 'full' || componentName === selected);
       }
       if (label instanceof THREE.Sprite) {
         label.material.opacity = !label.visible
@@ -2769,64 +2863,52 @@ export default function Boiler3D({ mode, selected, labels, flow, explode, contex
       state.highlight.visible = false;
       state.selectionGlow.visible = false;
     }
-  }, [mode, selected, labels, flow, explode, contextMode]);
+  }, [mode, selected, labels, flow, explode, contextMode, combustionState]);
 
   useEffect(() => {
     const state = stateRef.current;
     if (!state || cameraCommand.id === 0) return;
 
     const presetFor = (object: THREE.Object3D, multiplier = 1.7): CameraPreset | null => {
-      const bounds = new THREE.Box3().setFromObject(object);
+      const bounds = geometryBounds(object);
       if (bounds.isEmpty()) return null;
-      const size = bounds.getSize(new THREE.Vector3());
-      const center = bounds.getCenter(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
+      const center = object === state.root ? new THREE.Vector3(-0.35,0.62,0.40) : bounds.getCenter(new THREE.Vector3());
+      const isRoot = object === state.root;
+      const hint = cameraHints[object.name];
+      const fitYaw = isRoot ? -0.82 : hint?.yaw ?? state.orbit.yaw;
+      const fitPitch = isRoot ? 0.26 : hint?.pitch ?? state.orbit.pitch;
       return {
-        yaw: state.orbit.yaw,
-        pitch: THREE.MathUtils.clamp(state.orbit.pitch, -0.36, 0.58),
-        radius: THREE.MathUtils.clamp(Math.max(3.8, maxDim * multiplier * (state.mobileRender ? 1.12 : 1)), 3.4, 34),
+        yaw: fitYaw,
+        pitch: fitPitch,
+        radius: fitDistance(bounds, state.camera, fitYaw, fitPitch, multiplier > 2 ? 1.27 : 1.04, center),
         target: [center.x, center.y, center.z],
       };
     };
 
     if (cameraCommand.action === 'fitBoiler' || cameraCommand.action === 'reset') {
       const preset = presetFor(state.root, state.mobileRender ? 1.62 : 1.4);
-      if (preset) state.transitionCamera({ ...preset, yaw: -0.76, pitch: 0.18 }, 760);
+      if (preset) state.transitionCamera({ ...preset, yaw: -0.82, pitch: 0.26 }, 760);
     } else if (cameraCommand.action === 'fitComponent') {
       const componentName = cameraCommand.component ?? selectedRef.current;
-      if (componentName === 'Burner & Ignition') {
-        const canvasAspect = state.renderer.domElement.clientWidth / Math.max(1, state.renderer.domElement.clientHeight);
-        const mobileLandscape = state.mobileRender && canvasAspect > 1.45;
-        const burnerPreset: CameraPreset = state.mobileRender
-          ? mobileLandscape
-            ? { yaw: -0.50, pitch: 0.085, radius: 7.55, target: [-3.42, -0.62, 0.02] }
-            : { yaw: -0.44, pitch: 0.105, radius: 11.35, target: [-3.38, -0.62, 0.02] }
-          : { yaw: -0.52, pitch: 0.095, radius: 8.95, target: [-3.48, -0.62, 0.02] };
-        state.transitionCamera(burnerPreset, 820);
-      } else {
-        const object = state.components.get(componentName);
-        const preset = object ? presetFor(object, state.mobileRender ? 2.55 : 2.25) : null;
-        if (preset) {
-          const hint = cameraHints[componentName];
-          state.transitionCamera({ ...preset, ...hint }, 650);
-        }
-      }
+      const object = state.components.get(componentName);
+      const preset = object ? presetFor(object, 2.25) : null;
+      if (preset) state.transitionCamera(preset, 780);
     } else if (cameraCommand.action === 'zoomIn') {
       state.transitionCamera({
         yaw: state.orbit.yaw,
         pitch: state.orbit.pitch,
-        radius: THREE.MathUtils.clamp(state.orbit.radius * 0.82, 3.4, 34),
+        radius: THREE.MathUtils.clamp(state.orbit.radius * 0.82, 2.0, 48),
         target: [state.orbit.target.x, state.orbit.target.y, state.orbit.target.z],
       }, 300);
     } else if (cameraCommand.action === 'zoomOut') {
       state.transitionCamera({
         yaw: state.orbit.yaw,
         pitch: state.orbit.pitch,
-        radius: THREE.MathUtils.clamp(state.orbit.radius * 1.22, 3.4, 34),
+        radius: THREE.MathUtils.clamp(state.orbit.radius * 1.22, 2.0, 48),
         target: [state.orbit.target.x, state.orbit.target.y, state.orbit.target.z],
       }, 300);
     }
   }, [cameraCommand]);
 
-  return <div ref={hostRef} className="three-host" aria-label="Interactive 3D industrial steam boiler" />;
+  return <div ref={hostRef} className="three-host" aria-label="Interactive 3D industrial steam boiler">{unavailable && <div className="webgl-unavailable" role="status"><strong>3D view unavailable</strong><p>Enable WebGL or open this page in a browser with hardware acceleration. Component information and learning modules remain available.</p></div>}</div>;
 }

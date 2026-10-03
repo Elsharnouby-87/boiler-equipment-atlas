@@ -27,10 +27,13 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: TypeScript QA
         run: npx tsc --noEmit
+
+      - name: Geometry QA
+        run: node scripts/verify-geometry.mjs
 
       - name: Production build
         run: npm run build

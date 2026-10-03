@@ -45,7 +45,7 @@ Where the source gives example timings or settings, the UI labels them as traini
 ## Development
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -53,6 +53,7 @@ Production QA:
 
 ```bash
 npx tsc --noEmit
+node scripts/verify-geometry.mjs
 npm run build
 ```
 
@@ -71,3 +72,9 @@ After that, pushes to `main` build and deploy automatically.
 UI foundation: [Process Equipment Atlas](https://github.com/Elsharnouby-87/process-equipment-atlas)
 
 Boiler Atlas repository: [boiler-equipment-atlas](https://github.com/Elsharnouby-87/boiler-equipment-atlas)
+
+## Realism upgrade
+
+The existing procedural model now has hollow pressure walls and fire tubes, perforated tube sheets, a sectioned furnace, connected twin level glasses, routed utilities, an open stack, finned economizer circuits and layered mounting hardware. Studio IBL, material-specific microtexture, restrained turbulent flame, instancing/batching and aspect-aware framing serve all five existing modules. See `docs/BOILER_REALISM_GAP_ANALYSIS.md` and `docs/REALISM_QA.md` for the source decisions, visual evidence and validation limits.
+
+The geometry verification script uses Node 22.18+ or Node 24, which can load erasable TypeScript directly.

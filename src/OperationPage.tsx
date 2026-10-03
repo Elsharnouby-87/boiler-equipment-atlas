@@ -211,6 +211,7 @@ export default function OperationPage({ onBack, onNavigate }: Props) {
             selected={stage.component}
             labels
             flow={stage.flow}
+            combustionState={stage.id === 'ignition' ? 'pilot' : ['prestart','purge','shutdown'].includes(stage.id) ? 'off' : 'firing'}
             explode={false}
             contextMode={stage.context}
             cameraCommand={cameraCommand}

@@ -272,9 +272,9 @@ const componentNames = Object.keys(details);
 
 export default function App() {
   const [activeModule, setActiveModule] = useState<'atlas' | 'components' | 'boilerTypes' | 'operation' | 'troubleshooting'>('atlas');
-  const [mode, setMode] = useState<ViewMode>('cutaway');
-  const [selected, setSelected] = useState('Furnace Tube');
-  const [labels, setLabels] = useState(true);
+  const [mode, setMode] = useState<ViewMode>('normal');
+  const [selected, setSelected] = useState('Boiler Shell');
+  const [labels, setLabels] = useState(false);
   const [flow, setFlow] = useState(false);
   const [explode, setExplode] = useState(false);
   const [contextMode, setContextMode] = useState<ContextMode>('full');
@@ -381,7 +381,7 @@ export default function App() {
 
       <section className="atlas-contextbar">
         <div><span>INTERACTIVE 3D REFERENCE</span><strong>Industrial Steam Boiler · 3-Pass Fire-Tube Master Model</strong></div>
-        <p>Training visualization · Schematic geometry · Follow site/OEM procedures</p>
+        <p>Generic industrial training model · Follow site/OEM procedures</p>
       </section>
 
       <section className="atlas-workspace">

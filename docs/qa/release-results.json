@@ -1,0 +1,101 @@
+{
+  "operation": [
+    {
+      "index": 0,
+      "state": "off",
+      "mainFlames": "0"
+    },
+    {
+      "index": 1,
+      "state": "off",
+      "mainFlames": "0"
+    },
+    {
+      "index": 2,
+      "state": "pilot",
+      "mainFlames": "0"
+    },
+    {
+      "index": 3,
+      "state": "firing",
+      "mainFlames": "4"
+    },
+    {
+      "index": 4,
+      "state": "firing",
+      "mainFlames": "0"
+    },
+    {
+      "index": 5,
+      "state": "firing",
+      "mainFlames": "4"
+    },
+    {
+      "index": 6,
+      "state": "off",
+      "mainFlames": "0"
+    }
+  ],
+  "metrics": {
+    "Normal": {
+      "ready": "true",
+      "statsAt": "6997.300000000047",
+      "drawCalls": "164",
+      "triangles": "112152",
+      "geometries": "160",
+      "textures": "7",
+      "cameraFinite": "true",
+      "cameraPose": "-0.7600,0.1800,20.9974,-0.3500,0.6200,0.4000",
+      "combustionState": "firing",
+      "mainFlames": "4"
+    },
+    "Cutaway": {
+      "ready": "true",
+      "statsAt": "10299.5",
+      "drawCalls": "172",
+      "triangles": "113396",
+      "geometries": "160",
+      "textures": "7",
+      "cameraFinite": "true",
+      "cameraPose": "-0.7600,0.1800,20.9974,-0.3500,0.6200,0.4000",
+      "combustionState": "firing",
+      "mainFlames": "4"
+    },
+    "mobile": {
+      "ready": "true",
+      "statsAt": "8572.59999999986",
+      "drawCalls": "164",
+      "triangles": "112152",
+      "geometries": "160",
+      "textures": "7",
+      "cameraFinite": "true",
+      "cameraPose": "-0.7600,0.1800,41.0587,-0.3500,0.6200,0.4000",
+      "combustionState": "firing",
+      "mainFlames": "4"
+    }
+  },
+  "layout": {
+    "canvas": {
+      "x": 0,
+      "y": 106,
+      "width": 390,
+      "height": 363.53125,
+      "top": 106,
+      "right": 390,
+      "bottom": 469.53125,
+      "left": 0
+    },
+    "panel": {
+      "x": 8,
+      "y": 481.53125,
+      "width": 374,
+      "height": 354.46875,
+      "top": 481.53125,
+      "right": 382,
+      "bottom": 836,
+      "left": 8
+    }
+  },
+  "errors": [],
+  "missing": []
+}

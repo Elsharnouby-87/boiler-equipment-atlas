@@ -1,0 +1,53 @@
+{
+  "checks": [
+    "Visible burner geometry selects the semantic burner component",
+    "All 18 component selections preserve details and finite camera transforms",
+    "Search filters and Enter selects matching component",
+    "Focus, isolate, fit, zoom, labels and flow controls remain functional",
+    "Normal, cutaway, x-ray and exploded modes render without runtime errors",
+    "Repeated-selection GPU geometry/texture counts stabilize after label warm-up",
+    "Components, Operation and Troubleshooting navigate, change study topics and return to Atlas",
+    "Both fire-tube and water-tube type models render and switch",
+    "390 \u00d7 844 panel leaves a separate model canvas; genuine touch orbit/pinch work without page scrolling",
+    "Mobile global navigation and type switch work"
+  ],
+  "errors": [],
+  "missing": [],
+  "memory": [
+    {
+      "geometries": 162,
+      "textures": 39
+    },
+    {
+      "geometries": 162,
+      "textures": 39
+    },
+    {
+      "geometries": 162,
+      "textures": 39
+    }
+  ],
+  "panelLayout": {
+    "canvas": {
+      "x": 0,
+      "y": 106,
+      "width": 390,
+      "height": 363.53125,
+      "top": 106,
+      "right": 390,
+      "bottom": 469.53125,
+      "left": 0
+    },
+    "panel": {
+      "x": 8,
+      "y": 831.2084350585938,
+      "width": 374,
+      "height": 354.46881103515625,
+      "top": 831.2084350585938,
+      "right": 382,
+      "bottom": 1185.67724609375,
+      "left": 8
+    }
+  },
+  "panelLayoutSampleNote": "This layout sample was taken during the opening transition. See release-results.json for the settled, in-viewport panel measurement."
+}

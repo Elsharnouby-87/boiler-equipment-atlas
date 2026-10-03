@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { hollowCylinderX } from './industrialGeometry';
 
 export type BoilerSurfaceKind = 'paintedSteel' | 'darkSteel' | 'stainless' | 'refractory' | 'concrete';
 
@@ -10,9 +11,9 @@ export function makeBoilerSurfaceTexture(kind: BoilerSurfaceKind, mobile = false
   const ctx = canvas.getContext('2d')!;
 
   const palette: Record<BoilerSurfaceKind, [string, string, string]> = {
-    paintedSteel: ['#56666e', '#87959c', '#303b41'],
-    darkSteel: ['#333f46', '#66747b', '#1b2429'],
-    stainless: ['#8e9aa0', '#c4ced2', '#58646a'],
+    paintedSteel: ['#dedede', '#f7f7f7', '#b8b8b8'],
+    darkSteel: ['#c5c5c5', '#e5e5e5', '#a5a5a5'],
+    stainless: ['#dddddd', '#fafafa', '#b4b4b4'],
     refractory: ['#8b6e53', '#c5a47c', '#503d2d'],
     concrete: ['#596064', '#848a8d', '#353b3e'],
   };
@@ -79,6 +80,7 @@ export function makeBoilerSurfaceTexture(kind: BoilerSurfaceKind, mobile = false
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(kind === 'refractory' ? 2.1 : 4.0, kind === 'refractory' ? 2.8 : 4.0);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.userData.surfaceKind = kind;
   texture.anisotropy = mobile ? 2 : 6;
   return texture;
 }
@@ -112,6 +114,8 @@ export function makeFlameMaterial(
       uniform float uTime;
       uniform float uSeed;
       varying vec2 vUv;
+      varying vec3 vNormal;
+      varying vec3 vView;
       void main() {
         vUv = uv;
         vec3 p = position;
@@ -130,7 +134,10 @@ export function makeFlameMaterial(
         ) * smoothstep(0.58, 1.0, axial);
         p.x *= 0.97 + sin(uTime * 6.1 + p.y * 3.6 + uSeed) * 0.032 * axial;
         p.z *= 0.98 + cos(uTime * 6.8 + p.y * 3.2 + uSeed) * 0.028 * axial;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        vec4 view = modelViewMatrix * vec4(p, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vView = -view.xyz;
+        gl_Position = projectionMatrix * view;
       }
     `,
     fragmentShader: `
@@ -141,19 +148,25 @@ export function makeFlameMaterial(
       uniform float uContextOpacity;
       uniform float uSeed;
       varying vec2 vUv;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      float hash(vec3 p) {p=fract(p*0.3183099+vec3(.17,.31,.53));p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+      float noise(vec3 p) {
+        vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+                   mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);
+      }
       void main() {
-        float bandA = 0.5 + 0.5 * sin(vUv.y * 35.0 - uTime * 8.4 + sin(vUv.x * 21.0 + uSeed));
-        float bandB = 0.5 + 0.5 * sin(vUv.y * 17.0 - uTime * 5.6 + cos(vUv.x * 29.0 + uSeed * 1.9));
-        float turbulence = mix(bandA, bandB, 0.44);
-        float rootFade = smoothstep(0.0, 0.055, vUv.y);
-        float tipFade = 1.0 - smoothstep(0.72, 1.0, vUv.y);
-        float edgeLife = rootFade * max(0.035, tipFade);
-        float tipFlicker = 0.82 + 0.18 * sin(uTime * 11.5 + uSeed * 4.0 + vUv.y * 10.0);
-        float alpha = (0.24 + turbulence * 0.56) * edgeLife * uOpacity * uContextOpacity;
-        alpha *= mix(1.0, tipFlicker, smoothstep(0.48, 1.0, vUv.y));
-        vec3 col = mix(uLow, uHigh, smoothstep(0.04, 0.9, vUv.y));
-        col *= 0.84 + turbulence * 0.34;
-        gl_FragColor = vec4(col, alpha);
+        float angle=vUv.x*6.2831853;
+        vec3 p=vec3(cos(angle)*2.1,sin(angle)*2.1,vUv.y*9.0-uTime*3.8)+uSeed;
+        float n=noise(p)*0.57+noise(p*2.03+uTime*.19)*0.29+noise(p*4.1-uTime*.11)*0.14;
+        float rootFade=smoothstep(0.0,0.035,vUv.y);
+        float tipFade=1.0-smoothstep(0.63,1.0,vUv.y+n*.085);
+        float facing=pow(abs(dot(normalize(vNormal),normalize(vView))),0.58);
+        float alpha=smoothstep(.22,.74,n)*rootFade*tipFade*facing*uOpacity*uContextOpacity;
+        vec3 col=mix(uLow,uHigh,smoothstep(.04,.87,vUv.y));
+        col*=0.78+n*0.66;
+        gl_FragColor=vec4(col,alpha);
       }
     `,
     transparent: true,
@@ -231,17 +244,17 @@ export function addBoltRingX(
   centerY = 0,
   centerZ = 0,
 ) {
-  const geometry = new THREE.CylinderGeometry(boltRadius, boltRadius, 0.10, 10);
+  const geometry = new THREE.CylinderGeometry(boltRadius, boltRadius, 0.10, 6);
+  const bolts = new THREE.InstancedMesh(geometry, boltMaterial, count);
+  const dummy = new THREE.Object3D();
   for (let i = 0; i < count; i += 1) {
     const angle = (i / count) * Math.PI * 2;
-    const bolt = new THREE.Mesh(geometry, boltMaterial);
-    bolt.rotation.z = Math.PI / 2;
-    bolt.position.set(x, centerY + Math.sin(angle) * radius, centerZ + Math.cos(angle) * radius);
-    bolt.userData.component = componentName;
-    bolt.userData.kind = 'utility';
-    bolt.userData.baseOpacity = 1;
-    group.add(bolt);
+    dummy.rotation.z = Math.PI / 2;
+    dummy.position.set(x, centerY + Math.sin(angle) * radius, centerZ + Math.cos(angle) * radius);
+    dummy.updateMatrix(); bolts.setMatrixAt(i, dummy.matrix);
   }
+  bolts.userData.component = componentName;bolts.userData.kind = 'utility';bolts.userData.baseOpacity = 1;
+  group.add(bolts);
 }
 
 export function addFlangeX(
@@ -255,25 +268,10 @@ export function addFlangeX(
   flangeMaterial: THREE.Material,
   componentName: string,
 ) {
-  const flange = new THREE.Mesh(
-    new THREE.CylinderGeometry(outerRadius, outerRadius, thickness, 36),
-    flangeMaterial,
-  );
-  flange.rotation.z = Math.PI / 2;
+  const flange = new THREE.Mesh(hollowCylinderX(outerRadius, innerRadius, thickness, 48), flangeMaterial);
   flange.position.set(x, y, z);
   flange.userData.component = componentName;
   flange.userData.kind = 'utility';
   flange.userData.baseOpacity = 1;
   group.add(flange);
-
-  const bore = new THREE.Mesh(
-    new THREE.CylinderGeometry(innerRadius, innerRadius, thickness + 0.012, 28),
-    new THREE.MeshBasicMaterial({ color: '#08121a' }),
-  );
-  bore.rotation.z = Math.PI / 2;
-  bore.position.set(x, y, z);
-  bore.userData.component = componentName;
-  bore.userData.kind = 'utility';
-  bore.userData.baseOpacity = 1;
-  group.add(bore);
 }

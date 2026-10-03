@@ -890,3 +890,18 @@ button { -webkit-tap-highlight-color: transparent; }
   .trouble-progress span { display: none; }
   .trouble-phase-rail button { flex-basis: 116px; }
 }
+
+/* Keep the selected equipment in the remaining mobile viewport when details open. */
+@media (max-width: 700px) {
+  .atlas-workspace .inspector-panel { height: min(42dvh, 360px); }
+  .app-shell:has(.atlas-workspace .inspector-panel.mobile-open) .hero-viewer .three-host { bottom: calc(min(42dvh, 360px) + 20px); }
+  .app-shell:has(.atlas-workspace .inspector-panel.mobile-open) .hero-viewer .control-dock { bottom: calc(min(42dvh, 360px) + 26px); }
+  .atlas-workspace .view-pills button { min-width: 44px; min-height: 44px; }
+  .atlas-workspace .control-dock button { min-width: 38px; min-height: 44px; }
+  .atlas-workspace .viewer-kicker { pointer-events: none; }
+  .atlas-workspace .context-state { pointer-events: none; max-width: 48%; left: auto; right: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell *, .app-shell *::before, .app-shell *::after { scroll-behavior: auto; transition-duration: 0.01ms !important; }
+}
+.webgl-unavailable { position: absolute; inset: 35% 10% auto; padding: 24px; border: 1px solid #315366; border-radius: 12px; background: #071b29; color: #d8e7ec; text-align: center; line-height: 1.6; }
